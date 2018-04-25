@@ -1,0 +1,70 @@
+---
+title: "Analysis of a TCGA RNA-seq data set on Chromophobe Renal Cell Carcinoma"
+author:
+- name: the first author
+  affiliation:
+  - &id Master Programme on Bioinformatics for Health Sciences, Universitat Pompeu Fabra, Barcelona, Spain
+  email: the.first.author@upf.edu
+- name: the second author
+  affiliation: *id
+  email: the.second.author@upf.edu
+- name: the third author
+  affiliation: *id
+  email: the.third.author@upf.edu
+date: "`r format(Sys.time(), '%B %e, %Y')`"
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+bibliography: bibliography.bib
+---
+
+# Introduction
+
+Chromophobe renall cell carcinoma (KICH), is a rare form of kidney cancer
+affecting about 5\% of all cancers arising from the kidney nephron. The
+Cancer Genome Atlas (TCGA) has comprehensively profiled this type of cancer
+in a patient cohort. Here we analyze the expression profiles of those
+patients, accessible in the form of a raw RNA-seq counts produced by
+@rahman2015alternative using a pipeline based on the R/Bioconductor
+software package `r Biocpkg("Rsubread")`.
+
+This document is written in [R markdown](https://rmarkdown.rstudio.com) and
+should be processed using R and you need to install the packages
+`r CRANpkg("knitr")` and `r CRANpkg("markdown")`. Moreover, it using the official
+style for Bioconductor vignettes facilitated by the Bioconductor package
+`r Biocpkg("BiocStyle")`. Please consult that package documentation, and particularly
+the [vignette](http://bioconductor.org/packages/release/bioc/vignettes/BiocStyle/inst/doc/AuthoringRmdVignettes.html)
+on "Authoring R Markdown vignettes", for full details on how to elaborate this
+kind of documents.
+
+The specific instructions to generate the final HTML report are written in a
+[Makefile](https://en.wikipedia.org/wiki/Makefile). To run it you just need to type
+
+   ```
+   $ make
+   ```
+
+on the unix shell. The `makefile` contains instructions to separately process
+the different files that integrate this report, and so only the file that has
+been modified will be rebuilt. If you wish to remove or add files to be processed,
+you should modify the `makefile`.
+
+The directory `results` will contain resulting files produced during the analysis,
+however, figures are going to end by default directories associated with the
+source filenames from where they were created.
+
+```{r echo=FALSE, results='asis'}
+cat(readLines("QAanalysis.knit.md"), sep="\n")
+```
+
+```{r echo=FALSE, results='asis'}
+cat(readLines("DEanalysis.knit.md"), sep="\n")
+```
+
+```{r echo=FALSE, results='asis'}
+cat(readLines("FEanalysis.knit.md"), sep="\n")
+```
+
+# References

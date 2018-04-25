@@ -1,0 +1,86 @@
+---
+output:
+  BiocStyle::html_document
+---
+
+<!---
+Because we split the analysis pipeline in different independent files,
+to speed up processing it, here in the setup block we load libraries and
+objects that were loaded or produced in the previously processed file,
+and which are necessary in this file.
+--->
+
+```{r setup, cache=FALSE, echo=FALSE, results='hide', message=FALSE}
+library(knitr)
+library(SummarizedExperiment)
+library(edgeR)
+library(geneplotter)
+
+opts_chunk$set(cache=TRUE,
+               cache.path="cache/file2",
+               cache.extra=R.version.string,
+               autodep=TRUE,
+               fig.align="center",
+               comment="")
+
+se <- readRDS(file.path("rawCounts", "seKICH.rds"))
+dge <- readRDS(file.path("results", "dge.rds"))
+se.filt.unnorm <- readRDS(file.path("results", "se.filt.unnorm.rds"))
+dge.filt.unnorm <- readRDS(file.path("results", "dge.filt.unnorm.rds"))
+se.filt <- readRDS(file.path("results", "se.filt.rds"))
+dge.filt <- readRDS(file.path("results", "dge.filt.rds"))
+
+
+```
+
+# Differential expression
+
+We perform a simple examination of expression changes and their associated p-values
+using the R/Bioconductor package [sva](http://bioconductor.org/packages/sva).
+
+```{r, message=FALSE}
+library(sva)
+mod <- model.matrix(~ se.filt$type, colData(se.filt))
+mod0 <- model.matrix(~ 1, colData(se.filt))
+pv <- f.pvalue(assays(se.filt)$logCPM, mod, mod0)
+sum(p.adjust(pv, method="fdr") < 0.01)
+```
+
+There are `r sum(p.adjust(pv, method="fdr") < 0.01)` genes changing significantly
+their expression at FDR < 1%. In Figure \@ref(fig:pdist) below we show the distribution of the
+resulting p-values.
+
+```{r pdist, echo=FALSE, out.width="400px", fig.cap="Distribution of raw p-values for an F-test on every gene between tumor and normal samples."}
+hist(pv, main="", las=1)
+```
+
+Now, let's estimate surrogate variables using the `sva()` function.
+
+```{r}
+sv <- sva(assays(se.filt)$logCPM, mod, mod0)
+sv$n
+```
+
+The SVA algorithm has found `r sv$n` surrogate variables. Let's use them to
+assess againt the extent of differential expression this time adjusting for these
+surrogate variables.
+
+```{r}
+modsv <- cbind(mod, sv$sv)
+mod0sv <- cbind(mod0, sv$sv)
+pvsv <- f.pvalue(assays(se.filt)$logCPM, modsv, mod0sv)
+sum(p.adjust(pvsv, method="fdr") < 0.01)
+```
+
+We have increased the number of changing genes to `r sum(p.adjust(pvsv, method="fdr") < 0.01)`.
+Figure \@ref(fig:psvdist) shows the resulting distribution of p-values.
+
+```{r psvdist, echo=FALSE, out.width="400px", fig.cap="Distribution of raw p-values for an F-test on every gene between tumor and normal samples, adjusting for surrogate variables estimated with SVA."}
+hist(pvsv, main="", las=1)
+```
+
+## Session information
+
+```{r, message=FALSE}
+sessionInfo()
+```

@@ -1,0 +1,44 @@
+---
+output:
+  BiocStyle::html_document
+---
+
+<!---
+Because we split the analysis pipeline in different independent files,
+to speed up processing it, here in the setup block we load libraries and
+objects that were loaded or produced in the previously processed file,
+and which are necessary in this file.
+--->
+
+```{r setup, cache=FALSE, echo=FALSE, results='hide', message=FALSE}
+library(knitr)
+library(SummarizedExperiment)
+library(edgeR)
+library(geneplotter)
+
+opts_chunk$set(cache=TRUE,
+               cache.path="cache/file2",
+               cache.extra=R.version.string,
+               autodep=TRUE,
+               fig.align="center",
+               comment="")
+
+se <- readRDS(file.path("rawCounts", "seKICH.rds"))
+dge <- readRDS(file.path("results", "dge.rds"))
+se.filt.unnorm <- readRDS(file.path("results", "se.filt.unnorm.rds"))
+dge.filt.unnorm <- readRDS(file.path("results", "dge.filt.unnorm.rds"))
+se.filt <- readRDS(file.path("results", "se.filt.rds"))
+dge.filt <- readRDS(file.path("results", "dge.filt.rds"))
+
+
+```
+
+# Functional analysis
+
+Here we do the functional analysis.
+
+## Session information
+
+```{r, message=FALSE}
+sessionInfo()
+```
