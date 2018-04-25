@@ -76,7 +76,7 @@ for (i in 1:2) {
 }
 
 ## MDS
-plotMDS(dge_luad.filt, col = c("red", "blue")[as.integer(dge_luad.filt$samples$group)], cex = 6, pch = 22)
+plotMDS(dge_luad.filt, col = c("red", "blue")[as.integer(dge_luad.filt$samples$group)], cex = 2, pch = 17)
 legend("topleft", c("Normal", "Tumor"), fill = c("red", "blue"), inset = 0.05, cex = 0.7)
 
 # faltaria fer nomes els punts sense nom
