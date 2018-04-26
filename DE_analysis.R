@@ -240,6 +240,7 @@ table(tss)
 
 center <- substr(colnames(se.filt), 27, 28)
 table(center)
+#All samples on same center: we can delete
 
 plate <- substr(colnames(se.filt), 22, 25)
 table(plate)
@@ -250,7 +251,9 @@ table(portionanalyte)
 samplevial <- substr(colnames(se.filt), 14, 16)
 table(samplevial)
 
-#ALl samples on same center: we can delete
+gender <- unname(se.filt$gender)
+
+race <- unname(se.filt$race)
 
 ## Cross tabulation data
 
@@ -263,35 +266,29 @@ table(data.frame(TYPE=se.filt$type, PLATE=plate))
 
 table(data.frame(TYPE=se.filt$type, PORTIONALYTE=portionanalyte))
 # All normal samples have extremly low values of portion analyte
+# Not necessary: tumor and normal have separated values
 
-## Batch effects
+table(data.frame(TYPE=se.filt$type, GENDER=gender))
+#Seems pretty equilibred
 
-#
-logCPM <- cpm(dge_luad.filt, log=TRUE, prior.count=3)
-d <- as.dist(1-cor(logCPM, method="spearman"))
-sampleClustering <- hclust(d)
-batch <- as.integer(factor(plate))
-sampleDendrogram <- as.dendrogram(sampleClustering, hang=0.1)
-names(batch) <- colnames(se.filt)
-outcome <- paste(substr(colnames(se.filt), 9, 12), as.character(se.filt$type), sep="-")
-names(outcome) <- colnames(se.filt)
-par(mfrow = c(1,1))
-sampleDendrogram <- dendrapply(sampleDendrogram,
-                               function(x, batch, labels) {
-                                 if (is.leaf(x)) {
-                                   attr(x, "nodePar") <- list(lab.col=as.vector(batch[attr(x, "label")]))
-                                   attr(x, "label") <- as.vector(labels[attr(x, "label")])
-                                 }
-                                 x
-                               }, batch, outcome)
-plot(sampleDendrogram, main="Hierarchical clustering of samples")
-legend("topright", paste("Batch", sort(unique(batch)), levels(factor(tss))), fill=sort(unique(batch)))
+table(data.frame(TYPE=se.filt$type, RACE=race))
+#Mising too much dat
 
-# Now in MDS
-logCPM <- cpm(dge_luad.filt, log=TRUE, prior.count=3)
-d <- as.dist(1-cor(logCPM, method="spearman"))
-sampleClustering <- hclust(d)
-batch <- as.integer(factor(tss))
-plotMDS(dge_luad.filt, labels=outcome, col=batch)
-legend("bottomleft", paste("Batch", sort(unique(batch)), levels(factor(plate))),
-       fill=sort(unique(batch)), inset=0.05)
+## Batch effects plot MDS
+
+#Titles and objects lists
+titles_batchs <- c("MDS plot: Tisue Source Site",
+                   "MDS plot: Plate",
+                   "MDS plot: Sex",
+                   "MDS plot: Ethnicity")
+objects_batchs <- list(tss, plate, gender,race)
+
+for (a in 1:4){
+  logCPM <- cpm(dge_luad.filt, log=TRUE, prior.count=3)
+  d <- as.dist(1-cor(logCPM, method="spearman"))
+  sampleClustering <- hclust(d)
+  batch <- as.integer(factor(objects_batchs[[a]]))
+  plotMDS(dge_luad.filt, labels=outcome, col=batch, main =titles_batchs[a])
+#  legend("bottomleft", paste("Batch", sort(unique(batch)), levels(factor(a))),
+ #        fill=sort(unique(batch)), inset=0.05)
+}
