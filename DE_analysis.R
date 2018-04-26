@@ -199,18 +199,99 @@ abline(h = 0, col = "blue", lwd = 2)
 plotSmear(dge_luad.filt, lowess = TRUE, las = 1, cex.lab = 1.5, cex.axis = 1.2)
 abline(h = 0, col = "blue", lwd = 2)
 
-# Expression by sample (two first samples)
-par(mfrow=c(1, 2), mar=c(4, 5, 3, 1))
-for (i in 1:2) {
-  A <- rowMeans(assays(se.filt)$logCPM) ; M <- assays(se.filt)$logCPM[, i] - A
-  smoothScatter(A, M, main=colnames(se.filt)[i], las=1, cex.axis=1.2, cex.lab=1.5, cex.main=2)
-  abline(h=0, col="blue", lwd=2) ; lo <- lowess(M ~ A) ; lines(lo$x, lo$y, col="red", lwd=2)
+# Expression by sample (tumor in blue, normal in green)
+par(mfrow=c(5, 4), mar = c(2,2,2,2))
+for (i in c(1,581)) {
+  inici <- i
+  final <- i+19
+  for (i in inici:final) {
+    A <- rowMeans(assays(se.filt)$logCPM) ; M <- assays(se.filt)$logCPM[, i] - A; C <- se.filt$type[[i]];
+    print(C)
+    smoothScatter(A, M,
+                  main=colnames(se.filt)[i],
+                  las=1,
+                  cex.axis=1.2,
+                  cex.lab=1.5,
+                  cex.main=1,
+                  colramp = colorRampPalette(c("white",ifelse(C == "tumor", "blue","green")),space = "Lab"))
+    abline(h=0, col="blue", lwd=2) ; lo <- lowess(M ~ A) ; lines(lo$x, lo$y, col="red", lwd=2)
+  }
 }
 
 ## MDS
-par(mfrow = c(1,1))
-plotMDS(dge_luad.filt, col = c("red", "blue")[as.integer(dge_luad.filt$samples$group)], cex = 2, pch = 17)
+par(mfrow = c(1,1), mar = c(5.1,4.1,4.1,2.1))
+plotMDS(dge_luad.filt, col = c("red", "blue")[as.integer(dge_luad.filt$samples$group)], cex = 0.7)
 legend("topleft", c("Normal", "Tumor"), fill = c("red", "blue"), inset = 0.05, cex = 0.7)
 
-# faltaria fer nomes els punts sense nom
+## Remove samples TCGA.64.5775.01A.01R.1628.07 and perhaps TCGA.49.AAR9.01A.21R.A41B.07
+maskbad <- colnames(dge_luad) %in% c("TCGA.64.5775.01A.01R.1628.07", "TCGA.49.AAR9.01A.21R.A41B.07")
+se.filt <- se.filt[, !maskbad]
+dge_luad.filt <- dge_luad.filt[, !maskbad]
+
 # faltaria fer per els altres 3 casos comprobats amb el GGplot
+
+##############
+## Session 2
+#############
+
+## Identifying batch effect: We'll use TCGA
+tss <- substr(colnames(se.filt), 6, 7)
+table(tss)
+
+center <- substr(colnames(se.filt), 27, 28)
+table(center)
+
+plate <- substr(colnames(se.filt), 22, 25)
+table(plate)
+
+portionanalyte <- substr(colnames(se.filt), 18, 20)
+table(portionanalyte)
+
+samplevial <- substr(colnames(se.filt), 14, 16)
+table(samplevial)
+
+#ALl samples on same center: we can delete
+
+## Cross tabulation data
+
+table(data.frame(TYPE=se.filt$type, TSS=tss))
+# Too much zeros. Only six TSS have noral samples
+
+table(data.frame(TYPE=se.filt$type, PLATE=plate))
+# Too much zeros: only 5 plates with normal. 
+# One of the plates (1758) only has normals!!!
+
+table(data.frame(TYPE=se.filt$type, PORTIONALYTE=portionanalyte))
+# All normal samples have extremly low values of portion analyte
+
+## Batch effects
+
+#
+logCPM <- cpm(dge_luad.filt, log=TRUE, prior.count=3)
+d <- as.dist(1-cor(logCPM, method="spearman"))
+sampleClustering <- hclust(d)
+batch <- as.integer(factor(plate))
+sampleDendrogram <- as.dendrogram(sampleClustering, hang=0.1)
+names(batch) <- colnames(se.filt)
+outcome <- paste(substr(colnames(se.filt), 9, 12), as.character(se.filt$type), sep="-")
+names(outcome) <- colnames(se.filt)
+par(mfrow = c(1,1))
+sampleDendrogram <- dendrapply(sampleDendrogram,
+                               function(x, batch, labels) {
+                                 if (is.leaf(x)) {
+                                   attr(x, "nodePar") <- list(lab.col=as.vector(batch[attr(x, "label")]))
+                                   attr(x, "label") <- as.vector(labels[attr(x, "label")])
+                                 }
+                                 x
+                               }, batch, outcome)
+plot(sampleDendrogram, main="Hierarchical clustering of samples")
+legend("topright", paste("Batch", sort(unique(batch)), levels(factor(tss))), fill=sort(unique(batch)))
+
+# Now in MDS
+logCPM <- cpm(dge_luad.filt, log=TRUE, prior.count=3)
+d <- as.dist(1-cor(logCPM, method="spearman"))
+sampleClustering <- hclust(d)
+batch <- as.integer(factor(tss))
+plotMDS(dge_luad.filt, labels=outcome, col=batch)
+legend("bottomleft", paste("Batch", sort(unique(batch)), levels(factor(plate))),
+       fill=sort(unique(batch)), inset=0.05)
