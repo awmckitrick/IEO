@@ -222,7 +222,7 @@ for (i in c(1,581)) {
 ## MDS
 par(mfrow = c(1,1), mar = c(5.1,4.1,4.1,2.1))
 plotMDS(dge_luad.filt, col = c("red", "blue")[as.integer(dge_luad.filt$samples$group)], cex = 0.7)
-legend("topleft", c("Normal", "Tumor"), fill = c("red", "blue"), inset = 0.05, cex = 0.7)
+legend("topright", c("Normal", "Tumor"), fill = c("red", "blue"), inset = 0.05, cex = 0.7)
 
 ## Remove samples TCGA.64.5775.01A.01R.1628.07 and perhaps TCGA.49.AAR9.01A.21R.A41B.07
 maskbad <- colnames(dge_luad) %in% c("TCGA.64.5775.01A.01R.1628.07", "TCGA.49.AAR9.01A.21R.A41B.07")
@@ -288,15 +288,19 @@ titles_batchs <- c("MDS plot: Tisue Source Site",
 objects_batchs <- list(tss, plate, gender,race, histo)
 outcome <- paste(substr(colnames(se.filt), 9, 12), as.character(se.filt$type), sep="-")
 for (a in 1:5){
+  png(filename = paste("projct/img/", titles_batchs[a], sep = ""), width = 900, height = 800)
   par(mfrow=c(1,1))
   logCPM <- cpm(dge_luad.filt, log=TRUE, prior.count=3)
   d <- as.dist(1-cor(logCPM, method="spearman"))
   sampleClustering <- hclust(d)
   batch <- as.integer(factor(objects_batchs[[a]]))
   plotMDS(dge_luad.filt, labels=outcome, col=batch, main =titles_batchs[a])
-  legend("bottomleft", paste("Batch", sort(unique(batch)), levels(factor(a))),
-        fill=sort(unique(batch)), inset=0.05)
+  legend("bottomright", paste("Batch", sort(unique(batch)), levels(factor(a))),
+        fill=sort(unique(batch)), inset=0.05, cex = 0.7)
+  dev.off()
 }
+
+png(filename = "projct/img/MDS_histology_tumoronly.png", width = 900, height = 800)
 se.tumor <- se.filt[, se$type == "tumor"]
 par(mfrow=c(1,1))
 tumor_dge <- DGEList(counts = assays(se.tumor)$counts, genes = as.data.frame(mcols(se.tumor)))
@@ -308,6 +312,7 @@ batch <- as.integer(factor(unname(se.tumor$histologic_diagnosis.1)))
 plotMDS(tumor_dge, labels=outcome, col=batch, main ="MDS tumor by histology")
 legend("topleft", paste("Batch", sort(unique(batch)), levels(factor(histo))),
        fill=sort(unique(batch)), inset=0.05, cex = 0.70)
+dev.off()
 
 
 
