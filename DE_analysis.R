@@ -2,9 +2,10 @@ library(SummarizedExperiment)
 library(edgeR)
 library(ggplot2)
 library(plyr)
+library(sva)
+library(grid)
 
 multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
-  library(grid)
   
   # Make a list from the ... arguments and plotlist
   plots <- c(list(...), plotlist)
@@ -255,6 +256,8 @@ gender <- unname(se.filt$gender)
 
 race <- unname(se.filt$race)
 
+histo <- unname(se.filt$histologic_diagnosis.1)
+
 ## Cross tabulation data
 
 table(data.frame(TYPE=se.filt$type, TSS=tss))
@@ -280,10 +283,11 @@ table(data.frame(TYPE=se.filt$type, RACE=race))
 titles_batchs <- c("MDS plot: Tisue Source Site",
                    "MDS plot: Plate",
                    "MDS plot: Sex",
-                   "MDS plot: Ethnicity")
-objects_batchs <- list(tss, plate, gender,race)
+                   "MDS plot: Ethnicity",
+                   "MDS plot: Histology")
+objects_batchs <- list(tss, plate, gender,race, histo)
 
-for (a in 1:4){
+for (a in 1:5){
   logCPM <- cpm(dge_luad.filt, log=TRUE, prior.count=3)
   d <- as.dist(1-cor(logCPM, method="spearman"))
   sampleClustering <- hclust(d)
@@ -297,7 +301,6 @@ for (a in 1:4){
 ##3. SVA
 ########
 
-library(sva)
 mod <- model.matrix(~ se.filt$type, colData(se.filt))
 mod0 <- model.matrix(~ 1, colData(se.filt))
 pv <- f.pvalue(assays(se.filt)$logCPM, mod, mod0)
