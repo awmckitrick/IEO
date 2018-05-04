@@ -292,3 +292,26 @@ for (a in 1:4){
 #  legend("bottomleft", paste("Batch", sort(unique(batch)), levels(factor(a))),
  #        fill=sort(unique(batch)), inset=0.05)
 }
+
+########
+##3. SVA
+########
+
+library(sva)
+mod <- model.matrix(~ se.filt$type, colData(se.filt))
+mod0 <- model.matrix(~ 1, colData(se.filt))
+pv <- f.pvalue(assays(se.filt)$logCPM, mod, mod0)
+sum(p.adjust(pv, method="fdr") < 0.01)
+# We have 8076 differentially expressed genes
+
+# Estimate surrogate variables
+sv <- sva(assays(se.filt)$logCPM, mod, mod0)
+sv$n
+# 50 surrogate variables
+
+#Adjusting surrogate variables
+modsv <- cbind(mod, sv$sv)
+mod0sv <- cbind(mod0, sv$sv)
+pvsv <- f.pvalue(assays(se.filt)$logCPM, modsv, mod0sv)
+sum(p.adjust(pvsv, method="fdr") < 0.01)
+#9396 genes differentially expressed now
