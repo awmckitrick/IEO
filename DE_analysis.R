@@ -230,12 +230,14 @@ for (i in c(1,581)) {
 }
 
 ## MDS
+png("img/MDS_type.png",width = 1100, height = 700)
 par(mfrow = c(1,1), mar = c(5.1,4.1,4.1,2.1))
-plotMDS(dge_luad.filt, col = c("red", "blue")[as.integer(dge_luad.filt$samples$group)], cex = 0.7)
-legend("topright", c("Normal", "Tumor"), fill = c("red", "blue"), inset = 0.05, cex = 0.7)
+plotMDS(dge_luad.filt, col = c("red", "blue")[as.integer(dge_luad.filt$samples$group)], cex = 0.7, main = "MDS plot: Normal vs tumor")
+legend("topright", c("Normal", "Tumor"), fill = c("red", "blue"), inset = 0.05, cex = 1)
+dev.off()
 
 ## Remove samples TCGA.64.5775.01A.01R.1628.07 and perhaps TCGA.49.AAR9.01A.21R.A41B.07
-maskbad <- colnames(dge_luad) %in% c("TCGA.64.5775.01A.01R.1628.07", "TCGA.49.AAR9.01A.21R.A41B.07")
+maskbad <- colnames(dge_luad) %in% c("TCGA.64.5775.01A.01R.1628.07")
 se.filt <- se.filt[, !maskbad]
 dge_luad.filt <- dge_luad.filt[, !maskbad]
 
@@ -295,23 +297,27 @@ titles_batchs <- c("MDS plot: Tisue Source Site",
                    "MDS plot: Sex",
                    "MDS plot: Ethnicity",
                    "MDS plot: Histology")
+names_batchs <- c("MDS_tss.png",
+                   "MDS_plate.png",
+                   "MDS_sex.png",
+                   "MDS_ethnicity.png",
+                   "MDS_histology.png")
 objects_batchs <- list(tss, plate, gender,race, histo)
 outcome <- paste(substr(colnames(se.filt), 9, 12), as.character(se.filt$type), sep="-")
 for (a in 1:5){
-  png(filename = paste("projct/img/", titles_batchs[a], sep = ""), width = 900, height = 800)
+  png(filename = paste("img/", names_batchs[a], sep = ""), width = 1100, height = 700)
   par(mfrow=c(1,1))
   logCPM <- cpm(dge_luad.filt, log=TRUE, prior.count=3)
   d <- as.dist(1-cor(logCPM, method="spearman"))
   sampleClustering <- hclust(d)
-  batch <- as.integer(factor(objects_batchs[[a]]))
-  plotMDS(dge_luad.filt, labels=outcome, col=batch, main =titles_batchs[a])
-  legend("bottomright", paste("Batch", sort(unique(batch)), levels(factor(a))),
-        fill=sort(unique(batch)), inset=0.05, cex = 0.7)
+  batch <- factor(objects_batchs[[a]])
+  plotMDS(dge_luad.filt, labels=outcome, col=as.integer(batch), main =titles_batchs[a])
+  legend("bottomright", legend=sort(unique(batch)), 
+         fill=sort(unique(batch)), inset=0.05, cex = 0.7)
   dev.off()
 }
-
 png(filename = "projct/img/MDS_histology_tumoronly.png", width = 900, height = 800)
-se.tumor <- se.filt[, se$type == "tumor"]
+se.tumor <- se.filt[, se.filt$type == "tumor"]
 par(mfrow=c(1,1))
 tumor_dge <- DGEList(counts = assays(se.tumor)$counts, genes = as.data.frame(mcols(se.tumor)))
 outcome <- paste(substr(colnames(se.tumor), 9, 12), as.character(se.tumor$type), sep="-")
@@ -324,7 +330,46 @@ legend("topleft", paste("Batch", sort(unique(batch)), levels(factor(histo))),
        fill=sort(unique(batch)), inset=0.05, cex = 0.70)
 dev.off()
 
+## DE analysis in normal & log format (only tumor samples)
+logCPM.filt <- cpm(dge_luad.filt, log=TRUE, prior.count=3)
+logCPM <- cpm(dge_luad, log=TRUE, prior.count=3)
+meanUnloggedExp.filt <- rowMeans(assays(se.filt)$counts)
+meanUnloggedExp <- rowMeans(assays(se)$counts)
+sdUnloggedExp.filt <- apply(assays(se.filt)$counts, 1, sd)
+sdUnloggedExp <- apply(assays(se)$counts, 1, sd)
+meanLoggedExp.filt <- rowMeans(logCPM.filt)
+meanLoggedExp <- rowMeans(logCPM)
+sdLoggedExp <- apply(logCPM, 1, sd)
+sdLoggedExp.filt <- apply(logCPM.filt, 1, sd)
 
+png("./img/DE_analysis.png",width=900,height = 400)
+par(mfrow=c(1, 2), mar = c(5.1,3.1,3.1,2.1) )
+plot(meanLoggedExp, sdLoggedExp, pch=".", cex=4, xlab="Log mean expression", ylab="SD", main= "Differential expression preprocessed")
+lines(lowess(meanLoggedExp, sdLoggedExp, f=0.25), lwd=2, col="red")
+plot(meanLoggedExp.filt, sdLoggedExp.filt, pch=".", cex=4, xlab="Log mean expression", ylab="SD", main= "Differential expression filtered")
+lines(lowess(meanLoggedExp.filt, sdLoggedExp.filt, f=0.25), lwd=2, col="red")
+dev.off()
+
+# Fold change plots
+png("./img/FC_analysis.png",width=900,height = 400)
+mod <- model.matrix(~ se.filt$type, colData(se.filt))
+mod0 <- model.matrix(~ 1, colData(se.filt))
+pv <- f.pvalue(assays(se.filt)$logCPM, mod, mod0)
+FDRpvalue <- p.adjust(pv, method="fdr")
+tumorExp <- rowMeans(logCPM.filt[, se.filt$type == "tumor"])
+normalExp <- rowMeans(logCPM.filt[, se.filt$type == "normal"])
+par(mfrow = c(1, 2))
+plot(tumorExp, normalExp, xlab = "Tumor", ylab = "Normal", pch = ".", cex = 4, las = 1)
+plot((tumorExp + normalExp)/2, tumorExp - normalExp, pch = ".", cex = 4, las = 1)
+dev.off()
+
+# Volcano plot
+png("./img/volcano_plot.png",width=400,height = 400)
+par(mfrow = c(1,1))
+logFC <- tumorExp-normalExp
+plot(logFC, -log10(pv), pch=16, cex=0.7, xlab="Log fold-change", ylab="-log10 Raw p-value", las=1)
+abline(h=-log10(max(pv[FDRpvalue <= 0.001])), lty=2)
+dev.off()
 
 ########
 ##3. SVA
