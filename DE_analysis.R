@@ -286,16 +286,30 @@ titles_batchs <- c("MDS plot: Tisue Source Site",
                    "MDS plot: Ethnicity",
                    "MDS plot: Histology")
 objects_batchs <- list(tss, plate, gender,race, histo)
-
+outcome <- paste(substr(colnames(se.filt), 9, 12), as.character(se.filt$type), sep="-")
 for (a in 1:5){
+  par(mfrow=c(1,1))
   logCPM <- cpm(dge_luad.filt, log=TRUE, prior.count=3)
   d <- as.dist(1-cor(logCPM, method="spearman"))
   sampleClustering <- hclust(d)
   batch <- as.integer(factor(objects_batchs[[a]]))
   plotMDS(dge_luad.filt, labels=outcome, col=batch, main =titles_batchs[a])
-#  legend("bottomleft", paste("Batch", sort(unique(batch)), levels(factor(a))),
- #        fill=sort(unique(batch)), inset=0.05)
+  legend("bottomleft", paste("Batch", sort(unique(batch)), levels(factor(a))),
+        fill=sort(unique(batch)), inset=0.05)
 }
+se.tumor <- se.filt[, se$type == "tumor"]
+par(mfrow=c(1,1))
+tumor_dge <- DGEList(counts = assays(se.tumor)$counts, genes = as.data.frame(mcols(se.tumor)))
+outcome <- paste(substr(colnames(se.tumor), 9, 12), as.character(se.tumor$type), sep="-")
+logCPM <- cpm(tumor_dge, log=TRUE, prior.count=3)
+d <- as.dist(1-cor(logCPM, method="spearman"))
+sampleClustering <- hclust(d)
+batch <- as.integer(factor(unname(se.tumor$histologic_diagnosis.1)))
+plotMDS(tumor_dge, labels=outcome, col=batch, main ="MDS tumor by histology")
+legend("topleft", paste("Batch", sort(unique(batch)), levels(factor(histo))),
+       fill=sort(unique(batch)), inset=0.05, cex = 0.70)
+
+
 
 ########
 ##3. SVA
