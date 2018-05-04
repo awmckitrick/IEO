@@ -4,6 +4,7 @@ library(ggplot2)
 library(plyr)
 library(sva)
 library(grid)
+library(geneplotter)
 
 multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
   
@@ -90,7 +91,7 @@ for(num in 1:6){
 
 # Gender BARPLOT
 g_df <- data.frame(supp=c("MALE", "FEMALE", "NA"),
-                   depth=rep(c('1vlow', '2low', '3midlow', '4mid', '5hih', '6vhigh'),each = 3),
+                   depth=rep(c('1st', '2nd', '3rd', '4th', '5th', '6th'),each = 3),
                    freq = c(gender[[1]],gender[[2]],gender[[3]], 
                             gender[[4]], gender[[5]],gender[[6]]))
 df_sorted <- arrange(g_df, depth, supp) 
@@ -105,7 +106,7 @@ p1 <- ggplot( data=df_cumsum, aes(x=depth, y=freq, fill=supp)) +
 
 # race BARPLOT
 r_df <- data.frame(supp = c("A. NATIVE", "ASIAN","BLACK", "WHITE", "NA"),
-                   depth=rep(c('1vlow', '2low', '3midlow', '4mid', '5hih', '6vhigh'),each = 5),
+                   depth=rep(c('1st', '2nd', '3rd', '4th', '5th', '6th'),each = 5),
                    freq = c(race[[1]],race[[2]],race[[3]], race[[4]], race[[5]],race[[6]]))
 df_sorted <- arrange(r_df, depth, supp) 
 df_cumsum <- ddply(df_sorted, "depth",transform, label_ypos=cumsum(freq))
@@ -119,7 +120,7 @@ p2 <-ggplot( data=df_cumsum, aes(x=depth, y=freq, fill=supp)) +
 
 # history_other_malignanci BAPLOT
 h_df <- data.frame(supp = c("Yes", "No", "NA"),
-                   depth=rep(c('1vlow', '2low', '3midlow', '4mid', '5hih', '6vhigh'),each = 3),
+                   depth=rep(c('1st', '2nd', '3rd', '4th', '5th', '6th'),each = 3),
                    freq = c(hstory_malignancy[[1]],hstory_malignancy[[2]],hstory_malignancy[[3]], hstory_malignancy[[4]], hstory_malignancy[[5]],hstory_malignancy[[6]]))
 df_sorted <- arrange(h_df, depth, supp) 
 df_cumsum <- ddply(df_sorted, "depth",transform, label_ypos=cumsum(freq))
@@ -133,7 +134,7 @@ p3 <- ggplot( data=df_cumsum, aes(x=depth, y=freq, fill=supp)) +
 
 #Type
 t_df <- data.frame(supp = c("Normal", "Tumor", "NA"),
-                   depth=rep(c('1vlow', '2low', '3midlow', '4mid', '5hih', '6vhigh'),each = 3),
+                   depth=rep(c('1st', '2nd', '3rd', '4th', '5th', '6th'),each = 3),
                    freq = c(typ[[1]],typ[[2]],typ[[3]], typ[[4]], typ[[5]],typ[[6]]))
 df_sorted <- arrange(t_df, depth, supp) 
 df_cumsum <- ddply(df_sorted, "depth",transform, label_ypos=cumsum(freq))
@@ -148,12 +149,15 @@ p4 <-ggplot( data=df_cumsum, aes(x=depth, y=freq, fill=supp)) +
 multiplot(p1, p2, p3, p4, cols=2)
 
 #Expression level by sample
-library(geneplotter)
-#multidensity(assays(se)$logCPM, xlab = "log2 CPM", legend = NULL, 
-#             main = "", cex.axis = 1.2, cex.lab = 1.5, las = 1)
+par(mfrow=c(1, 2))
+multidensity(as.list(as.data.frame(assays(se[, se$type == "tumor"])$logCPM)),
+             xlab="log 2 CPM", legend=NULL, main="Tumor samples", las=1)
+multidensity(as.list(as.data.frame(assays(se[, se$type == "normal"])$logCPM)),
+             xlab="log 2 CPM", legend=NULL, main="Normal samples", las=1)
 
 # Distribution of expression across genes
 avgexp <- rowMeans(assays(se)$logCPM)
+par(mfrow=c(1,1))
 hist(avgexp, xlab = expression(log[2] * "CPM"), main = "", las = 1, col = "gray")
 
 #Filtering genes
@@ -169,16 +173,20 @@ se.filt <- se[mask, ]
 dge_luad.filt <- dge_luad[mask, ]
 dim(se.filt)
 
+png(filename = "./img/expression_by_gene_corrected.png",width = 600, height = 500)
+par(mar = c(5.1,5.1,5.1,2.1))
 h <- hist(avgexp, xlab = expression("Expression level (" * log[2] * "CPM)"), main = "", 
           las = 1, col = "grey", cex.axis = 1.2, cex.lab = 1.5)
 x <- cut(rowMeans(assays(se.filt)$logCPM), breaks = h$breaks)
 lines(h$mids, table(x), type = "h", lwd = 10, lend = 1, col = "darkred")
 legend("topright", c("All genes", "Filtered genes"), fill = c("grey", "darkred"))
+dev.off()
 
 ### MA plots
 
 # Vuvuzela plot
-plotSmear(dge_luad.filt, lowess = TRUE, las = 1, cex.lab = 1.5, cex.axis = 1.2)
+par(mar = c(5.1,5.1,4.1,2.1),mfrow = c(1,1))
+plotSmear(dge_luad, lowess = TRUE, las = 1, cex.lab = 1.5, cex.axis = 1.2)
 abline(h = 0, col = "blue", lwd = 2)
 
 # Vuvuzela plot refiltered
@@ -194,11 +202,13 @@ abline(h = 0, col = "blue", lwd = 2)
 
 dge_luad.filt <- calcNormFactors(dge_luad.filt, normalize.method="quantile")
 
-par(mfrow = c(1, 2))
-plotSmear(dge_luad, lowess = TRUE, las = 1, cex.lab = 1.5, cex.axis = 1.2)
+png("./img/vuvuzelas.png",height = 500, width = 1000)
+par(mar = c(5.1,4.1,4.1,2.1),mfrow = c(1, 2))
+plotSmear(dge_luad, lowess = TRUE, las = 1, cex.lab = 1.5, cex.axis = 1.2, main = "Preprocesed data")
 abline(h = 0, col = "blue", lwd = 2)
-plotSmear(dge_luad.filt, lowess = TRUE, las = 1, cex.lab = 1.5, cex.axis = 1.2)
+plotSmear(dge_luad.filt, lowess = TRUE, las = 1, cex.lab = 1.5, cex.axis = 1.2, main = "Filtered and normalized data")
 abline(h = 0, col = "blue", lwd = 2)
+dev.off()
 
 # Expression by sample (tumor in blue, normal in green)
 par(mfrow=c(5, 4), mar = c(2,2,2,2))
