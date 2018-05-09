@@ -5,6 +5,8 @@ library(plyr)
 library(sva)
 library(grid)
 library(geneplotter)
+library(limma)
+
 
 multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
   
@@ -157,8 +159,8 @@ multidensity(as.list(as.data.frame(assays(se[, se$type == "normal"])$logCPM)),
 
 # Distribution of expression across genes
 avgexp <- rowMeans(assays(se)$logCPM)
-par(mfrow=c(1,1))
-hist(avgexp, xlab = expression(log[2] * "CPM"), main = "", las = 1, col = "gray")
+# par(mfrow=c(1,1))
+# hist(avgexp, xlab = expression(log[2] * "CPM"), main = "", las = 1, col = "gray")
 
 #Filtering genes
 cpmcutoff <- round(10/min(dge_luad$sample$lib.size/1e+06), digits = 1)
@@ -275,6 +277,9 @@ histo <- unname(se.filt$histologic_diagnosis.1)
 table(data.frame(TYPE=se.filt$type, TSS=tss))
 # Too much zeros. Only six TSS have noral samples
 
+table(data.frame(TYPE=se.filt$type, TSS=samplevial))
+
+
 table(data.frame(TYPE=se.filt$type, PLATE=plate))
 # Too much zeros: only 5 plates with normal. 
 # One of the plates (1758) only has normals!!!
@@ -290,24 +295,111 @@ table(data.frame(TYPE=se.filt$type, RACE=race))
 #Mising too much dat
 
 ## Batch effects plot MDS
+#Sample Vial has batch effect as seen in this dendogram
+logCPM <- cpm(dge_luad.filt, log=TRUE, prior.count=3)
+d <- as.dist(1-cor(logCPM, method="spearman"))
+sampleClustering <- hclust(d)
+batch <- as.integer(factor(samplevial))
+sampleDendrogram <- as.dendrogram(sampleClustering, hang=0.1)
+names(batch) <- colnames(se.filt)
+outcome <- as.character(se.filt$type)
+names(outcome) <- colnames(se.filt)
+sampleDendrogram <- dendrapply(sampleDendrogram,
+                               function(x, batch, labels) {
+                                 if (is.leaf(x)) {
+                                   attr(x, "nodePar") <- list(lab.col=as.vector(batch[attr(x, "label")]))
+                                   attr(x, "label") <- as.vector(labels[attr(x, "label")])
+                                 }
+                                 x
+                               }, batch, outcome)
+plot(sampleDendrogram, main="Hierarchical clustering of samples: Sample Vial")
+legend("topright", legend=sort(unique(batch)), 
+       fill=sort(unique(batch)), inset=0.05, cex = 0.7)
+
+#We try to remove the batch effect with the QR-decomposition method but it does not improve much but it's all we got
+mod <- model.matrix(~ se.filt$type, colData(se.filt))
+qrexp <- removeBatchEffect(logCPM, batch, design = mod)
+d <- as.dist(1-cor(qrexp, method="spearman"))
+sampleClustering <- hclust(d)
+sampleDendrogram <- as.dendrogram(sampleClustering, hang=0.1)
+names(outcome) <- colnames(se.filt)
+sampleDendrogram <- dendrapply(sampleDendrogram,
+                               function(x, batch, labels) {
+                                 if (is.leaf(x)) {
+                                   attr(x, "nodePar") <- list(lab.col=as.vector(batch[attr(x, "label")]))
+                                   attr(x, "label") <- as.vector(labels[attr(x, "label")])
+                                 }
+                                 x
+                               }, batch, outcome)
+plot(sampleDendrogram, main="Hierarchical clustering of samples: Sample Vial - QR correction")
+legend("topright", legend=sort(unique(batch)), 
+       fill=sort(unique(batch)), inset=0.05, cex = 0.7)
+#Try SVD batch removal, but it's worse than the QR correction
+library(corpcor)
+s <- fast.svd(t(scale(t(logCPM), center = TRUE, scale = TRUE)))
+pcSds <- s$d
+pcSds[1] <- 0
+svdexp <- s$u %*% diag(pcSds) %*% t(s$v)
+colnames(svdexp) <- colnames(se.filt)
+d <- as.dist(1-cor(svdexp, method="spearman"))
+sampleClustering <- hclust(d)
+sampleDendrogram <- as.dendrogram(sampleClustering, hang=0.1)
+names(outcome) <- colnames(se.filt)
+sampleDendrogram <- dendrapply(sampleDendrogram,
+                               function(x, batch, labels) {
+                                 if (is.leaf(x)) {
+                                   attr(x, "nodePar") <- list(lab.col=as.vector(batch[attr(x, "label")]))
+                                   attr(x, "label") <- as.vector(labels[attr(x, "label")])
+                                 }
+                                 x
+                               }, batch, outcome)
+plot(sampleDendrogram, main="Hierarchical clustering of samples: Sample Vial - SVD correction")
+legend("topright", legend=sort(unique(batch)), 
+       fill=sort(unique(batch)), inset=0.05, cex = 0.7)
+
+#We try with both batch effect correction and it works!! YEY!
+logCPM.batch <- logCPM
+logCPM <-removeBatchEffect(logCPM, batch, design = mod)
+assays(se.filt)$logCPM <- logCPM
+s <- fast.svd(t(scale(t(logCPM), center = TRUE, scale = TRUE)))
+pcSds <- s$d
+pcSds[1] <- 0
+svdexp <- s$u %*% diag(pcSds) %*% t(s$v)
+colnames(svdexp) <- colnames(se.filt)
+d <- as.dist(1-cor(svdexp, method="spearman"))
+sampleClustering <- hclust(d)
+sampleDendrogram <- as.dendrogram(sampleClustering, hang=0.1)
+names(outcome) <- colnames(se.filt)
+sampleDendrogram <- dendrapply(sampleDendrogram,
+                               function(x, batch, labels) {
+                                 if (is.leaf(x)) {
+                                   attr(x, "nodePar") <- list(lab.col=as.vector(batch[attr(x, "label")]))
+                                   attr(x, "label") <- as.vector(labels[attr(x, "label")])
+                                 }
+                                 x
+                               }, batch, outcome)
+plot(sampleDendrogram, main="Hierarchical clustering of samples: Sample Vial - QR & SVD correction")
+legend("topright", legend=sort(unique(batch)), 
+       fill=sort(unique(batch)), inset=0.05, cex = 0.7)
 
 #Titles and objects lists
 titles_batchs <- c("MDS plot: Tisue Source Site",
+                   "MDS plot: Sample vial",
                    "MDS plot: Plate",
                    "MDS plot: Sex",
                    "MDS plot: Ethnicity",
                    "MDS plot: Histology")
 names_batchs <- c("MDS_tss.png",
+                  "MDS_samplevial.png",
                    "MDS_plate.png",
                    "MDS_sex.png",
                    "MDS_ethnicity.png",
                    "MDS_histology.png")
-objects_batchs <- list(tss, plate, gender,race, histo)
+objects_batchs <- list(tss, samplevial, plate, gender,race, histo)
 outcome <- paste(substr(colnames(se.filt), 9, 12), as.character(se.filt$type), sep="-")
 for (a in 1:5){
   png(filename = paste("img/", names_batchs[a], sep = ""), width = 1100, height = 700)
   par(mfrow=c(1,1))
-  logCPM <- cpm(dge_luad.filt, log=TRUE, prior.count=3)
   d <- as.dist(1-cor(logCPM, method="spearman"))
   sampleClustering <- hclust(d)
   batch <- factor(objects_batchs[[a]])
@@ -321,7 +413,6 @@ se.tumor <- se.filt[, se.filt$type == "tumor"]
 par(mfrow=c(1,1))
 tumor_dge <- DGEList(counts = assays(se.tumor)$counts, genes = as.data.frame(mcols(se.tumor)))
 outcome <- paste(substr(colnames(se.tumor), 9, 12), as.character(se.tumor$type), sep="-")
-logCPM <- cpm(tumor_dge, log=TRUE, prior.count=3)
 d <- as.dist(1-cor(logCPM, method="spearman"))
 sampleClustering <- hclust(d)
 batch <- as.integer(factor(unname(se.tumor$histologic_diagnosis.1)))
@@ -331,15 +422,14 @@ legend("topleft", paste("Batch", sort(unique(batch)), levels(factor(histo))),
 dev.off()
 
 ## DE analysis in normal & log format (only tumor samples)
-logCPM.filt <- cpm(dge_luad.filt, log=TRUE, prior.count=3)
-logCPM <- cpm(dge_luad, log=TRUE, prior.count=3)
+logCPM.filt <- logCPM
 meanUnloggedExp.filt <- rowMeans(assays(se.filt)$counts)
 meanUnloggedExp <- rowMeans(assays(se)$counts)
 sdUnloggedExp.filt <- apply(assays(se.filt)$counts, 1, sd)
 sdUnloggedExp <- apply(assays(se)$counts, 1, sd)
 meanLoggedExp.filt <- rowMeans(logCPM.filt)
-meanLoggedExp <- rowMeans(logCPM)
-sdLoggedExp <- apply(logCPM, 1, sd)
+meanLoggedExp <- rowMeans(logCPM.batch)
+sdLoggedExp <- apply(logCPM.batch, 1, sd)
 sdLoggedExp.filt <- apply(logCPM.filt, 1, sd)
 
 png("./img/DE_analysis.png",width=900,height = 400)
@@ -367,7 +457,7 @@ dev.off()
 png("./img/volcano_plot.png",width=400,height = 400)
 par(mfrow = c(1,1))
 logFC <- tumorExp-normalExp
-plot(logFC, -log10(pv), pch=16, cex=0.7, xlab="Log fold-change", ylab="-log10 Raw p-value", las=1)
+plot(logFC, -log10(pv), pch=16, cex=0.7, xlab="Log fold-change", ylab="-log10 Raw p-value", las=1, col = ifelse(abs(logFC) >= 2, "red", "black"))
 abline(h=-log10(max(pv[FDRpvalue <= 0.001])), lty=2)
 dev.off()
 
@@ -376,8 +466,7 @@ dev.off()
 ########
 
 mod <- model.matrix(~ se.filt$type, colData(se.filt))
-mod0 <- model.matrix(~ 1, colData(se.filt))
-pv <- f.pvalue(assays(se.filt)$logCPM, mod, mod0)
+mod0 <- model.matrix(~ samplevial, colData(se.filt))
 sum(p.adjust(pv, method="fdr") < 0.01)
 # We have 8076 differentially expressed genes
 
@@ -392,3 +481,8 @@ mod0sv <- cbind(mod0, sv$sv)
 pvsv <- f.pvalue(assays(se.filt)$logCPM, modsv, mod0sv)
 sum(p.adjust(pvsv, method="fdr") < 0.01)
 #9396 genes differentially expressed now
+
+logFC <- tumorExp-normalExp
+plot(logFC, -log10(pvsv), pch=16, cex=0.7, xlab="Log fold-change", ylab="-log10 Raw p-value", las=1)
+abline(h=-log10(max(pvsv[FDRpvalue <= 0.001])), lty=2)
+
