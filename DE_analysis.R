@@ -43,9 +43,16 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
   }
 }
 
-#Introduce data
+# 2.1 Introduction of data
+
 se <- readRDS( "seLUAD.rds")
 se
+
+dim(colData(se))
+dim(rowData(se))
+
+#Clinical variables
+mcols(colData(se), use.names=TRUE)
 
 #Process dge list
 dge_luad <- DGEList(counts = assays(se)$counts, genes = as.data.frame(mcols(se)), group = se$type)
@@ -55,8 +62,16 @@ CPM <- t(t(dge_luad$counts)/(dge_luad$samples$lib.size/1e+06))
 assays(se)$logCPM <- cpm(dge_luad, log = TRUE, prior.count = 0.25)
 assays(se)$logCPM[1:3, 1:7]
 
-# BARPLOTS
-ord <- order(dge_luad$sample$lib.size)
+
+#2.2 Sequencing depth
+
+#Library sizes; it is not understandable
+ord <- order(dge_luad$sample$lib.size/1e6)
+barplot(dge_luad$sample$lib.size[ord]/1e6, las=1, ylab="Millions of reads",
+        xlab="Samples", col=c("blue", "red")[(se$type[ord] == "tumor") + 1])
+legend("topleft", c("tumor", "normal"), fill=c("red", "blue"), inset=0.01)
+
+# Custom BARPLOTS
 i <- 0
 ordsliced <- list(0)
 gender <- list(0)
@@ -89,6 +104,7 @@ for(num in 1:6){
   typ[[num]] <- c(length(colData(se)$type[ordsliced[[num]]][colData(se)$type[ordsliced[[num]]] == "normal"]) - typ_na,
                   length(colData(se)$type[ordsliced[[num]]][colData(se)$type[ordsliced[[num]]] == "tumor"]) - typ_na,
                   typ_na)
+  
 }
 
 # Gender BARPLOT
@@ -150,14 +166,14 @@ p4 <-ggplot( data=df_cumsum, aes(x=depth, y=freq, fill=supp)) +
 
 multiplot(p1, p2, p3, p4, cols=2)
 
-#Expression level by sample
+#2.3 Distribution of expression levels by sample
 par(mfrow=c(1, 2))
 multidensity(as.list(as.data.frame(assays(se[, se$type == "tumor"])$logCPM)),
              xlab="log 2 CPM", legend=NULL, main="Tumor samples", las=1)
 multidensity(as.list(as.data.frame(assays(se[, se$type == "normal"])$logCPM)),
              xlab="log 2 CPM", legend=NULL, main="Normal samples", las=1)
 
-# Distribution of expression across genes
+# 2.4 Distribution of expression among genes
 avgexp <- rowMeans(assays(se)$logCPM)
 # par(mfrow=c(1,1))
 # hist(avgexp, xlab = expression(log[2] * "CPM"), main = "", las = 1, col = "gray")
@@ -175,14 +191,11 @@ se.filt <- se[mask, ]
 dge_luad.filt <- dge_luad[mask, ]
 dim(se.filt)
 
-png(filename = "./img/expression_by_gene_corrected.png",width = 600, height = 500)
-par(mar = c(5.1,5.1,5.1,2.1))
 h <- hist(avgexp, xlab = expression("Expression level (" * log[2] * "CPM)"), main = "", 
           las = 1, col = "grey", cex.axis = 1.2, cex.lab = 1.5)
 x <- cut(rowMeans(assays(se.filt)$logCPM), breaks = h$breaks)
 lines(h$mids, table(x), type = "h", lwd = 10, lend = 1, col = "darkred")
 legend("topright", c("All genes", "Filtered genes"), fill = c("grey", "darkred"))
-dev.off()
 
 ### MA plots
 
