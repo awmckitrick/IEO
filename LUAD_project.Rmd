@@ -69,40 +69,51 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
 ```
 
 # Introduction
+The lung adenocarcinoma cancer is the most common type of lung cancer. It has a high incidence in the population and also an associated high mortality. That’s because nowadays this cancer is really hard to diagnose in its early steps and usually is found too late. Most of the previous studies aim to find genetic markers to be able to diagnose it in its stages. Although some genetic markers have been described and used, such as the mutation in the Kran gene, but more information is required.
 
-BLABLABLA
+Here in this project, the data of the TCGA project will be analyzed with the aim to find (and reproduce) the finding of differential expressed genes that could help to detect this kind of cancer.
 
 # Quality assessment
 
 ## Data description
 
-import the data
+The data obtained for this project comes from The Cancer Genome Atlas (TCGA). This data contains lung cancer gene expression information of both patients and healthy individuals (control).
 
 ```{r}
 se <- readRDS( "seLUAD.rds")
 se
 ```
 
-Lets look at our data. We have such genes and such samples
+The first step is to import and check the provided data and it’s associated metadata. In summary it contains 600 Samples and 549 Clinical variables. Each  one of those samples contains information about the expression of 20115 genes.
 
 ```{r}
 dim(colData(se))
 dim(rowData(se))
 ```
 
-Here we have a list of the clinical variables we can acces
+From the Clinical variables, the ones that were found to be interesting and, then, were further analyzed were:
+- Gender (Sex)
+- Race (Ethnicity)
+- History of other malignancy (if the patient had previous cases of cancer malignancy)
+- Type (If the sample is normal or a tumor)
+- Histologic Diagnosis (Information about the histological origin of the sample)
+
+Also, each sample’s name from the TCGA contains important information that was also taken into account. The information extracted from the sample was:
+- Tissue Source Site
+- Sample Vial
+- Sample Plate
+
 ```{r}
 mcols(colData(se), use.names=TRUE)
 ```
 
-To perform quality assessment and normalization we will use the 'DGEList' object from [edgeR](http://bioconductor.org/packages/edgeR) R/Bioconductor package.
+To perform quality assessment and normalization the 'DGEList' object from [edgeR](http://bioconductor.org/packages/edgeR) R/Bioconductor package will be used.
 
 ```{r}
 dge_luad <- DGEList(counts = assays(se)$counts, genes = as.data.frame(mcols(se)), group = se$type)
 ```
 
-Now calculate $\log_2$ CPM values of expression and put them as an additional
-assay element to ease their manipulation.
+$\log_2$ CPM values of expression are calculated as an additional assay element to ease their manipulation.
 
 ```{r}
 CPM <- t(t(dge_luad$counts)/(dge_luad$samples$lib.size/1e+06))
@@ -110,9 +121,11 @@ assays(se)$logCPM <- cpm(dge_luad, log = TRUE, prior.count = 0.25)
 assays(se)$logCPM[1:3, 1:7]
 ```
 
+The first  important step of this project is the assessment of the quality of the provided data. For this reason, the following analysis aims to find and correct possible errors that the data could have, such as batch effect, lack of homogeneity, possible confounding factors and source of noise (very low expressed genes).
+
 ## Sequencing depth
 
-Library sizes; it is not understandable because too much data
+The first step of the quality assessment involves checking the sequencing depth of the samples. The aim of this step is to verify that all the sample groups were sequenced with the same depth distribution, and to detect if any sample group, according to each clinical variable of interest, was poorly sequenced (to see if any clinical variable has had an effect on the sequencing process).
 
 ```{r libsizes, echo=FALSE, out.width="900px", fig.cap="Library sizes in increasing order."}
 ord <- order(dge_luad$sample$lib.size/1e6)
@@ -121,7 +134,7 @@ barplot(dge_luad$sample$lib.size[ord]/1e6, las=1, ylab="Millions of reads",
 legend("topleft", c("tumor", "normal"), fill=c("red", "blue"), inset=0.01)
 ```
 
-We will use custom barplots
+As the number of samples is huge, a bar for each sample will be not useful because the bar would be too small for the human eye. For this reason, a different approach was taken. This approach consists of clustering the samples with similar sequencing depth and then showing a bar plot of the clusters. If the bar plots of each level (category) of the corresponding analyzed clinical variable has the same height in each of the clusters, that means that the sequencing was homogeneous for that level.
 
 ```{r custombarplot, echo=FALSE, out.width="1000px", fig.cap="Quantile barplot of lib sizes classified by factor"}
 i <- 0
@@ -230,7 +243,12 @@ names(sampledepth) <- substr(colnames(se), 6, 12)
 head(sort(sampledepth))
 ```
 
+In general, the plots of all the clinical variables showed more or less  a similar sequencing depth distribution. However, in the bar plot of the clinical variable “Type”, the plot looked a little bit odd as it seems that the normal samples were in general sequenced with less depth than the tumor ones. This is important to take into account as the final objective of this project is to check for differential expression. Unfortunately, those samples cannot be removed because they are necessary to check the differences in gene expression of healthy and cancer tissues.
+
 ## Distribution of expression levels by sample
+
+The next step is to verify the expression levels among the samples. With this analysis we can check if any sample had an unusual expression profile. The best case scenario would be that all the samples showed a similar profile, meaning that all the samples were correctly collected. 
+Because of the huge amount of samples, they will be analyzed in two plots, one for the tumor ones and other for the healthy or normal ones.
 
 ```{r distRawExp, echo=FALSE, fig.height=4, fig.width=10, out.width="1000px", fig.cap="Non-parametric density distribution of expression profiles per sample."}
 par(mfrow=c(1, 2))
@@ -240,18 +258,23 @@ multidensity(as.list(as.data.frame(assays(se[, se$type == "normal"])$logCPM)),
              xlab="log 2 CPM", legend=NULL, main="Normal samples", las=1)
 ```
 
+The results of the plots are as expected since all the samples showed a similar bimodal profile, with some density of low or non expressed genes (first peak) and some density of more expressed genes (second peak). Since no sample has had an odd expression level profile, none of them has been removed.
+
 ## Distribution of expression among genes
 
-Before filtering
+As it has been observed in the previous analysis, some genes seemed to have really low expression values between samples. Now, it’s interesting to see if there is any gene that is systematically lowly expressed in all the samples because that would mean that it is not a relevant gene and could lead to false positives if analyzed (small differences in low expressed genes can seem statistically significant when they are probably caused by noise). 
+
+To check the average expression of each gene across samples, the average expression of each gene was plotted in an histogram.
+
 ```{r exprdist, echo=FALSE, out.width="650px", fig.cap="Distribution of average expression level per gene."}
 avgexp <- rowMeans(assays(se)$logCPM)
 par(mfrow=c(1,1))
 hist(avgexp, xlab = expression(log[2] * "CPM"), main = "", las = 1, col = "gray")
 ```
 
-filtering
+The histogram shows that there are in fact some systematically lowly expressed genes that should be removed. To filter out those genes, two cut-off values were used: the first one entailed a minimum CPM value accepted (obtained from: Minimum logCPM = 10/minimum depth). After deleting the genes that did not pass the first cut-off another filter step was applied. This filter step involved removing the genes that, because of the first cut-off step, had less samples than the smallest gene group (which in this case is the normal group, with 59 samples). 
+
 ```{r}
-#Minimum logCPM = 10/minimum depth
 cpmcutoff <- round(10/min(dge_luad$sample$lib.size/1e+06), digits = 1)
 cpmcutoff
 
@@ -265,7 +288,10 @@ dge_luad.filt <- dge_luad[mask, ]
 dim(se.filt)
 ```
 
-After filtering
+The results of the previous filtering are represented in the same histogram plot with red bars. These are the genes that passed the whole filtering process.
+
+At the beginning, we had 20115 different genes but after the filtering of the low expressed ones, `r dim(se.filt)[1]` remained.
+
 ```{r filtexprdist, echo=FALSE, out.width="650px", fig.cap="Distribution of average expression level of filtered and non filtered genes."}
 h <- hist(avgexp, xlab = expression("Expression level (" * log[2] * "CPM)"), main = "", 
           las = 1, col = "grey", cex.axis = 1.2, cex.lab = 1.5)
@@ -276,13 +302,14 @@ legend("topright", c("All genes", "Filtered genes"), fill = c("grey", "darkred")
 
 ## Normalization
 
-We calculate now the normalization factors on the filtered expression data set.
+One vital step is the quantile normalization, which is needed because, after sequencing, we obtain a given number of total reads that is fixed by the experiment procedure.
+This means that the counts observed for each gene are restricted by the total amount of reads, so if a sample has more expressed genes than another one with the same amount of reads, the numbers will not be equivalent and thus not comparable. ( Two genes equally expressed in two different samples can have different values of counts if one of those samples has more expressed genes than the other one).
 
 ```{r}
 dge_luad.filt <- calcNormFactors(dge_luad.filt, normalize.method="quantile")
 ```
 
-vuvuzela plots before and after the filtering and normalization.
+To see how this normalized step has affected to the expression levels of our data, two vuvuzella plots have been made, one with the non-filtered non-normalized data (left) and the other with the normalized and filtered one (right). As we can see, the differences are not really high which means that the data still has lots of variability.
 
 ```{r vuvuprefilt, echo=FALSE, out.width="1000px", fig.cap="Vuvuzela plots"}
 par(mfrow = c(1, 2))
@@ -291,6 +318,8 @@ abline(h = 0, col = "blue", lwd = 2)
 plotSmear(dge_luad.filt, lowess = TRUE, las = 1, cex.lab = 1.5, cex.axis = 1.2, main = "Filtered and normalized data")
 abline(h = 0, col = "blue", lwd = 2)
 ```
+
+After the normalization, the bulk of the difference of the mean expression between tumor and normal samples was closer to 0. This indicates that the process was done correctly since we expect that most of the genes are not differential expressed (so the bulk of the mean should be close to 0).
 
 ## MA-plots
 
