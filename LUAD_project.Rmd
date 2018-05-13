@@ -29,7 +29,9 @@ library(sva)
 library(grid)
 library(geneplotter)
 library(limma)
+
 knitr::opts_chunk$set(echo = TRUE)
+
 multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
   
   # Make a list from the ... arguments and plotlist
@@ -121,7 +123,7 @@ legend("topleft", c("tumor", "normal"), fill=c("red", "blue"), inset=0.01)
 
 We will use custom barplots
 
-```{r custombarplot, echo=FALSE, out.width="900px", fig.cap="Quantile barplot of lib sizes classified by factor"}
+```{r custombarplot, echo=FALSE, out.width="1000px", fig.cap="Quantile barplot of lib sizes classified by factor"}
 i <- 0
 ordsliced <- list(0)
 gender <- list(0)
@@ -167,7 +169,7 @@ df_cumsum <- ddply(df_sorted, "depth",transform, label_ypos=cumsum(freq))
 
 p1 <- ggplot( data=df_cumsum, aes(x=depth, y=freq, fill=supp)) +
   geom_bar(stat="identity") +
-  geom_text(aes(y=107.5-label_ypos,label=freq), vjust=1.6, color="black",
+  geom_text(aes(y=111-label_ypos,label=freq), vjust=1.6, color="black",
             position = position_dodge(0.9), size=3.5) +
   theme_minimal() + ggtitle("Barplot Gender depth distribution") +
   theme(plot.title = element_text(hjust = 0.5))
@@ -181,7 +183,7 @@ df_cumsum <- ddply(df_sorted, "depth",transform, label_ypos=cumsum(freq))
 
 p2 <-ggplot( data=df_cumsum, aes(x=depth, y=freq, fill=supp)) +
   geom_bar(stat="identity") +
-  geom_text(aes(y=107.5-label_ypos,label=freq), vjust=1.6, color="black",
+  geom_text(aes(y=111-label_ypos,label=freq), vjust=1.6, color="black",
             position = position_dodge(0.9), size=3.5) +
   theme_minimal() + ggtitle("Barplot Race depth distribution") +
   theme(plot.title = element_text(hjust = 0.5))
@@ -195,7 +197,7 @@ df_cumsum <- ddply(df_sorted, "depth",transform, label_ypos=cumsum(freq))
 
 p3 <- ggplot( data=df_cumsum, aes(x=depth, y=freq, fill=supp)) +
   geom_bar(stat="identity") +
-  geom_text(aes(y=107.5-label_ypos,label=freq), vjust=1.6, color="black",
+  geom_text(aes(y=111-label_ypos,label=freq), vjust=1.6, color="black",
             position = position_dodge(0.9), size=3.5) +
   theme_minimal() + ggtitle("Barplot history of other malignancy depth distribution") +
   theme(plot.title = element_text(hjust = 0.5))
@@ -209,7 +211,7 @@ df_cumsum <- ddply(df_sorted, "depth",transform, label_ypos=cumsum(freq))
 
 p4 <-ggplot( data=df_cumsum, aes(x=depth, y=freq, fill=supp)) +
   geom_bar(stat="identity") +
-  geom_text(aes(y=107.5-label_ypos,label=freq), vjust=1.6, color="black",
+  geom_text(aes(y=111-label_ypos,label=freq), vjust=1.6, color="black",
             position = position_dodge(0.9), size=3.5) +
   theme_minimal() + ggtitle("Barplot of type depth distribution") +
   theme(plot.title = element_text(hjust = 0.5))
@@ -225,7 +227,7 @@ actual numbers including portion of the sample identifier that distinguishes the
 ```{r}
 sampledepth <- round(dge_luad$sample$lib.size / 1e6, digits=1)
 names(sampledepth) <- substr(colnames(se), 6, 12)
-sort(sampledepth)
+head(sort(sampledepth))
 ```
 
 ## Distribution of expression levels by sample
@@ -533,13 +535,14 @@ legend("topleft", paste("Batch", sort(unique(batch)), levels(factor(histo))),
 ```{r}
 logCPM.filt <- logCPM
 meanUnloggedExp.filt <- rowMeans(assays(se.filt)$counts)
-meanUnloggedExp <- rowMeans(assays(se)$counts)
 sdUnloggedExp.filt <- apply(assays(se.filt)$counts, 1, sd)
-sdUnloggedExp <- apply(assays(se)$counts, 1, sd)
 meanLoggedExp.filt <- rowMeans(logCPM.filt)
+sdLoggedExp.filt <- apply(logCPM.filt, 1, sd)
+
+meanUnloggedExp <- rowMeans(assays(se)$counts)
+sdUnloggedExp <- apply(assays(se)$counts, 1, sd)
 meanLoggedExp <- rowMeans(logCPM.batch)
 sdLoggedExp <- apply(logCPM.batch, 1, sd)
-sdLoggedExp.filt <- apply(logCPM.filt, 1, sd)
 ```
 
 DE analysis in normal & log format (only tumor samples)
@@ -605,5 +608,5 @@ plot((tumorExp + normalExp)/2, tumorExp - normalExp, pch = ".", cex = 4, las = 1
 par(mfrow = c(1,1))
 logFC <- tumorExp-normalExp
 plot(logFC, -log10(pv), pch=16, cex=0.7, xlab="Log fold-change", ylab="-log10 Raw p-value", las=1, col = ifelse(abs(logFC) >= 2, "red", "black"))
-abline(h=-log10(max(pv[FDRpvalue <= 0.001])), lty=2)`
+abline(h=-log10(max(pv[FDRpvalue <= 0.001])), lty=2)
 ```
