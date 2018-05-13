@@ -4,7 +4,7 @@ author:
 - name: Aranda D.
   affiliation:
   - &id Master Programme on Bioinformatics for Health Sciences, Universitat Pompeu Fabra, Barcelona, Spain
-  email: the.first.author@estudiant.upf.edu
+  email: david.aranda03@estudiant.upf.edu
 - name: Gracia O.
   affiliation: *id
   email: the.second.author@estudiant.upf.edu
@@ -251,6 +251,7 @@ hist(avgexp, xlab = expression(log[2] * "CPM"), main = "", las = 1, col = "gray"
 
 filtering
 ```{r}
+#Minimum logCPM = 10/minimum depth
 cpmcutoff <- round(10/min(dge_luad$sample$lib.size/1e+06), digits = 1)
 cpmcutoff
 
@@ -336,29 +337,21 @@ dge_luad.filt <- dge_luad.filt[, !maskbad]
 Identifying batch effect: We'll use TCGA code
 ```{r}
 tss <- substr(colnames(se.filt), 6, 7)
-table(tss)
 
 center <- substr(colnames(se.filt), 27, 28)
-table(center)
 #All samples on same center: we can delete
 
 plate <- substr(colnames(se.filt), 22, 25)
-table(plate)
 
 portionanalyte <- substr(colnames(se.filt), 18, 20)
-table(portionanalyte)
 
 samplevial <- substr(colnames(se.filt), 14, 16)
-table(samplevial)
 
 gender <- unname(se.filt$gender)
-table(gender)
 
 race <- unname(se.filt$race)
-table(race)
 
 histo <- unname(se.filt$histologic_diagnosis.1)
-table(histo)
 ```
 
 Cross tabulation data
@@ -534,6 +527,7 @@ legend("topleft", paste("Batch", sort(unique(batch)), levels(factor(histo))),
 
 ```{r}
 logCPM.filt <- logCPM
+logCPM.origin <- cpm(dge_luad, log=TRUE, prior.count = 3)
 meanUnloggedExp.filt <- rowMeans(assays(se.filt)$counts)
 sdUnloggedExp.filt <- apply(assays(se.filt)$counts, 1, sd)
 meanLoggedExp.filt <- rowMeans(logCPM.filt)
@@ -541,8 +535,8 @@ sdLoggedExp.filt <- apply(logCPM.filt, 1, sd)
 
 meanUnloggedExp <- rowMeans(assays(se)$counts)
 sdUnloggedExp <- apply(assays(se)$counts, 1, sd)
-meanLoggedExp <- rowMeans(logCPM.batch)
-sdLoggedExp <- apply(logCPM.batch, 1, sd)
+meanLoggedExp <- rowMeans(logCPM.origin)
+sdLoggedExp <- apply(logCPM.origin, 1, sd)
 ```
 
 DE analysis in normal & log format (only tumor samples)
@@ -569,7 +563,7 @@ There are `r sum(p.adjust(pv, method="fdr") < 0.01)` genes changing significantl
 their expression at FDR < 1%. In Figure \@ref(fig:pdist) below we show the distribution of the
 resulting p-values.
 
-```{r pdist, echo=FALSE, out.width="400px", fig.cap="Distribution of raw p-values for an F-test on every gene between tumor and normal samples."}
+```{r pdist, echo=FALSE, out.width="1000px", fig.cap="Distribution of raw p-values for an F-test on every gene between tumor and normal samples."}
 hist(pv, main="", las=1)
 ```
 
