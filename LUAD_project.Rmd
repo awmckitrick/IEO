@@ -7,7 +7,7 @@ author:
   email: david.aranda03@estudiant.upf.edu
 - name: Gracia O.
   affiliation: *id
-  email: the.second.author@estudiant.upf.edu
+  email: oriol.gracia01@estudiant.upf.edu
 - name: Serrano A.
   affiliation: *id
   email: alvaro.serrano03@estudiant.upf.edu
@@ -17,6 +17,7 @@ output:
     toc: true
     toc_float: true
     number_sections: true
+bibliography: bibliography.bib
 ---
 
 ```{r setup, include=FALSE}
@@ -69,9 +70,9 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
 ```
 
 # Introduction
-The lung adenocarcinoma cancer is the most common type of lung cancer. It has a high incidence in the population and also an associated high mortality. That’s because nowadays this cancer is really hard to diagnose in its early steps and usually is found too late. Most of the previous studies aim to find genetic markers to be able to diagnose it in its stages. Although some genetic markers have been described and used, such as the mutation in the Kran gene, but more information is required.
+The lung adenocarcinoma cancer is the most common type of lung cancer. It has a high incidence in the population and also an associated high mortality @Collisson2014. That’s because nowadays this cancer is really hard to diagnose in its early steps and usually is found too late @Giordano2018. Most of the previous studies aim to find genetic markers to be able to diagnose it in its stages. Although some genetic markers have been described and used, such as the mutation in the Kran gene, but more information is required @Inamura2018.
 
-Here in this project, the data of the TCGA project will be analyzed with the aim to find (and reproduce) the finding of differential expressed genes that could help to detect this kind of cancer.
+Here in this project, the data of the TCGA project will be analyzed with the aim to find (and reproduce) the finding of differential expressed genes that could help to detect this kind of cancer @Collisson2014.
 
 # Quality assessment
 
@@ -92,16 +93,16 @@ dim(rowData(se))
 ```
 
 From the Clinical variables, the ones that were found to be interesting and, then, were further analyzed were:
-- Gender (Sex)
-- Race (Ethnicity)
-- History of other malignancy (if the patient had previous cases of cancer malignancy)
-- Type (If the sample is normal or a tumor)
-- Histologic Diagnosis (Information about the histological origin of the sample)
+* Gender (Sex)
+* Race (Ethnicity)
+* History of other malignancy (if the patient had previous cases of cancer malignancy)
+* Type (If the sample is normal or a tumor)
+* Histologic Diagnosis (Information about the histological origin of the sample)
 
 Also, each sample’s name from the TCGA contains important information that was also taken into account. The information extracted from the sample was:
-- Tissue Source Site
-- Sample Vial
-- Sample Plate
+* Tissue Source Site
+* Sample Vial
+* Sample Plate
 
 ```{r}
 mcols(colData(se), use.names=TRUE)
@@ -323,6 +324,10 @@ After the normalization, the bulk of the difference of the mean expression betwe
 
 ## MA-plots
 
+The objective of this set of plots is to see if any sample as an expression profile that is different from the rest of the samples. As the gene with differential expression should be few, the majority of genes should have an expression level similar to the average expression for that gene. So, in summary, the most of the points should be around the 0 (no difference).
+
+The profiles for all the samples had been observed. However, due to the huge amount of samples only 50 of the two important groups ( tumor and normal) are shown.
+
 ```{r maPlots, fig.height=36, fig.width=8, dpi=100, echo=FALSE, fig.cap="MA-plots of some tumor(blue) and normal(green) samples."}
 par(mfrow=c(12, 4), mar = c(2,2,2,2))
 for (i in c(1,553)) {
@@ -333,6 +338,7 @@ for (i in c(1,553)) {
     smoothScatter(A, M,
                   main=colnames(se.filt)[i],
                   las=1,
+                  ylim=c(-10,10),
                   cex.axis=1.2,
                   cex.lab=1.5,
                   cex.main=1,
@@ -343,47 +349,42 @@ for (i in c(1,553)) {
 
 ```
 
+The result don’t show expression-level dependent biases among the samples, so no sample needs to be removed.
 
 ## Variability and batch identification
 
 ### Check sources of cofounding variability
-A quick look to our main source of variation before exploring if we suffer from batch effect
+
+To begin with, a MDS plot was done to check which is the main source of variability of our data.
+
 ```{r firstmds, echo=FALSE, out.width="1000px", fig.cap="MDS preprocessed"}
 par(mfrow = c(1,1), mar = c(5.1,4.1,4.1,2.1))
 plotMDS(dge_luad.filt, col = c("red", "blue")[as.integer(dge_luad.filt$samples$group)], cex = 0.7, main = "MDS plot: Normal vs tumor")
 legend("topright", c("Normal", "Tumor"), fill = c("red", "blue"), inset = 0.05, cex = 1)
 ```
 
-We detect two possible outlayer samples: TCGA.64.5775.01A.01R.1628.07 and perhaps TCGA.49.AAR9.01A.21R.A41B.07
+As expected, the main source of variability is the difference between tumor and normal samples.
+In addition, after doing the plot, two possible outliers were detected. These are 
+TCGA.64.5775.01A.01R.1628.07 and perhaps TCGA.49.AAR9.01A.21R.A41B.07 samples. 
+These two samples will not be removed yet but they will be examined with detail in further analysis.
 
-alvaro: realment ens les hauriem de petar? o millor fer-ho mes tard si despres del batch effect segueixen sent outlayers
-```{r}
-maskbad <- colnames(dge_luad) %in% c("TCGA.64.5775.01A.01R.1628.07")
-se.filt <- se.filt[, !maskbad]
-dge_luad.filt <- dge_luad.filt[, !maskbad]
-```
+#### Identifying batch effect variables
 
-Identifying batch effect: We'll use TCGA code
+The variables in which the batch effect will be checked are the following:
+
 ```{r}
 tss <- substr(colnames(se.filt), 6, 7)
-
 center <- substr(colnames(se.filt), 27, 28)
-#All samples on same center: we can delete
-
 plate <- substr(colnames(se.filt), 22, 25)
-
 portionanalyte <- substr(colnames(se.filt), 18, 20)
-
 samplevial <- substr(colnames(se.filt), 14, 16)
-
 gender <- unname(se.filt$gender)
-
 race <- unname(se.filt$race)
-
 histo <- unname(se.filt$histologic_diagnosis.1)
 ```
 
-Cross tabulation data
+In order to check possible batch effects in the clinical variables of interest, cross tabulation tables were performed.
+
 ```{r}
 table(data.frame(TYPE=se.filt$type, TSS=tss))
 # Too much zeros. Only six TSS have noral samples
@@ -409,7 +410,12 @@ table(data.frame(TYPE=se.filt$type, RACE=histo))
 #Mising too much dat
 ```
 
-### Batch effect found in samplevial
+Most tables didn’t present clear results as the amount of normal samples is very low compared to the tumor ones. 
+However, the sample vial variable showed clearly biased results, as all the normal samples were sequenced in different vials.
+
+### Batch effect found in sample vial
+
+As the sample vial variable showed a clear batch effect in the previous analysis, different batch effect removing techniques will be used to decrease the impact of this batch in our data.
 
 ```{r samplevialdendo1, fig.height=7, fig.width=14, dpi=100, echo=FALSE, fig.cap="Dendogram of variation labeled by Sample Vial"}
 logCPM <- cpm(dge_luad.filt, log=TRUE, prior.count=3)
@@ -433,8 +439,9 @@ legend("topright", legend=sort(unique(batch)),
        fill=sort(unique(batch)), inset=0.05, cex = 0.7)
 ```
 
+The figure /@ref(fig:samplevialdendo1) provides a a way to graphically observe this batch effect.
 
-We try to remove the batch effect with the QR-decomposition method but it does not improve much but it's all we got
+The first approach used to remove the batch effect was QR-decomposition.
 ```{r samplevialdendo2, fig.height=7, fig.width=14, dpi=100, echo=FALSE, fig.cap="Dendogram of variation labeled by Sample Vial corrected with QR", message=FALSE}
 mod <- model.matrix(~ se.filt$type, colData(se.filt))
 qrexp <- removeBatchEffect(logCPM, batch, design = mod)
@@ -455,7 +462,8 @@ legend("topright", legend=sort(unique(batch)),
        fill=sort(unique(batch)), inset=0.05, cex = 0.7)
 ```
 
-Try SVD batch removal, but it's worse than the QR correction
+As it can be seen, this method didn't accomplish the desired effect since the batch effect is still present. Thus, a more agressive method, namely SVD batch removal, was applied:
+
 ```{r samplevialdendo3, fig.height=7, fig.width=14, dpi=100, echo=FALSE, fig.cap="Dendogram of variation labeled by Sample Vial corrected with SVD", message=FALSE}
 library(corpcor)
 s <- fast.svd(t(scale(t(logCPM), center = TRUE, scale = TRUE)))
@@ -480,7 +488,8 @@ legend("topright", legend=sort(unique(batch)),
        fill=sort(unique(batch)), inset=0.05, cex = 0.7)
 ```
 
-We try with both batch effect correction and it works!! YEY!
+Unfortunately, after the statistical treatment the sample vial batch effect is still present. 
+As the normal samples can’t be removed, both approaches will be applied simultaneously to try to remove the effect. 
 
 ```{r samplevialdendo4, fig.height=7, fig.width=14, dpi=100, echo=FALSE, fig.cap="Dendogram of variation labeled by Sample Vial corrected with SVD & QR", message=FALSE}
 logCPM.batch <- logCPM
@@ -509,21 +518,27 @@ legend("topright", legend=sort(unique(batch)),
 
 ```
 
-### MDS plots 
+After applying the combination of both methods the batch effect was finally removed. 
+Now it’s important to check that this aggressive approach hasn’t removed the variability of our data. 
+This topic will be covered in the next section
+
+### Analysis of unclear variables 
+
+There are variables where batch effect presence is uncertain. Thus MDS plot were done as a graphical way to check possible batch effects.
+This unclear variables were:
+  + Tisue source site (TSS)
+  + Plate
+  + Sex
+  + Ethnicity
+  + Histology
+Sample vial variable, which is pressumed to be associated with batch effect, was ploted as reference: 
 
 ```{r mdsplots1, fig.height=7, fig.width=14, dpi=100, echo=FALSE, fig.cap="MDS plots without batch labeled for different clinical variables", message=FALSE}
 titles_batchs <- c("MDS plot: Tisue Source Site",
-                   "MDS plot: Sample vial",
                    "MDS plot: Plate",
                    "MDS plot: Sex",
                    "MDS plot: Ethnicity",
                    "MDS plot: Histology")
-names_batchs <- c("MDS_tss.png",
-                  "MDS_samplevial.png",
-                   "MDS_plate.png",
-                   "MDS_sex.png",
-                   "MDS_ethnicity.png",
-                   "MDS_histology.png")
 objects_batchs <- list(tss, samplevial, plate, gender,race, histo)
 outcome <- paste(substr(colnames(se.filt), 9, 12), as.character(se.filt$type), sep="-")
 for (a in 1:5){
@@ -536,23 +551,13 @@ for (a in 1:5){
          fill=sort(unique(batch)), inset=0.05, cex = 0.7)
 }
 ```
-
-### Alvaro: bola extra */variability between tumors/*
-
-```{r bolaxtra1, fig.height=7, fig.width=14, dpi=100, echo=FALSE, fig.cap="MDS plot of tumor samples labeled by histology", message=FALSE}
-se.tumor <- se.filt[, se.filt$type == "tumor"]
-par(mfrow=c(1,1))
-tumor_dge <- DGEList(counts = assays(se.tumor)$counts, genes = as.data.frame(mcols(se.tumor)))
-outcome <- paste(substr(colnames(se.tumor), 9, 12), as.character(se.tumor$type), sep="-")
-d <- as.dist(1-cor(logCPM, method="spearman"))
-sampleClustering <- hclust(d)
-batch <- as.integer(factor(unname(se.tumor$histologic_diagnosis.1)))
-plotMDS(tumor_dge, labels=outcome, col=batch, main ="MDS tumor by histology")
-legend("topleft", paste("Batch", sort(unique(batch)), levels(factor(histo))),
-       fill=sort(unique(batch)), inset=0.05, cex = 0.70)
-```
+There doesn't seems to be any significant batch effect across these uncertain variables (except for sample vial, as was expected). Therefore, the uncertainty observed on cross tabulation tables was due to sample size differences between normal and tumor groups.
 
 # Differential expression
+
+Since the main objective of this project was to find differentially expressed genes an initial rough approach is used. 
+However, a more complex and detailed analysis will be performed in the second part of the project.
+The most basic method to spot differential expression is to check the standard deviation of expression of each gene between samples against the mean expression. The genes with a higher standard deviation than the expected from the mean expression are the best candidates to be differentially expressed.
 
 ```{r}
 logCPM.filt <- logCPM
@@ -568,8 +573,7 @@ meanLoggedExp <- rowMeans(logCPM.origin)
 sdLoggedExp <- apply(logCPM.origin, 1, sd)
 ```
 
-DE analysis in normal & log format (only tumor samples)
-```{r DElogynormal, echo=FALSE, out.width="900px", fig.cap="Log y normal cambiar titulo"}
+```{r DElogynormal, echo=FALSE, out.width="900px", fig.cap="Scatter plot: variability vs gene expression"}
 par(mfrow=c(1, 2))
 plot(meanLoggedExp, sdLoggedExp, pch=".", cex=4, xlab="Log mean expression", ylab="SD", main= "Differential expression preprocessed")
 lines(lowess(meanLoggedExp, sdLoggedExp, f=0.25), lwd=2, col="red")
@@ -577,26 +581,23 @@ plot(meanLoggedExp.filt, sdLoggedExp.filt, pch=".", cex=4, xlab="Log mean expres
 lines(lowess(meanLoggedExp.filt, sdLoggedExp.filt, f=0.25), lwd=2, col="red")
 ```
 
-
-A simple examination of expression changes and their associated p-values
-using the R/Bioconductor package [sva](http://bioconductor.org/packages/sva).
-
+To combine the data apported by both Standard Deviation and log mean expressions, multiple F-tests are performed (one for each gene). 
 ```{r}
 mod <- model.matrix(~ se.filt$type, colData(se.filt))
 mod0 <- model.matrix(~ 1, colData(se.filt))
 pv <- f.pvalue(assays(se.filt)$logCPM, mod, mod0)
-sum(p.adjust(pv, method="fdr") < 0.01)
+sum(p.adjust(pv, method = "bonferroni") < 0.01)
 ```
 
 There are `r sum(p.adjust(pv, method="fdr") < 0.01)` genes changing significantly
-their expression at FDR < 1%. In Figure \@ref(fig:pdist) below we show the distribution of the
-resulting p-values.
+their expression at FDR < 1%. In Figure \@ref(fig:pdist) below  the distribution of the
+resulting p-values is showed:
 
 ```{r pdist, echo=FALSE, out.width="1000px", fig.cap="Distribution of raw p-values for an F-test on every gene between tumor and normal samples."}
 hist(pv, main="", las=1)
 ```
 
-Now, let's estimate surrogate variables using the `sva()` function.
+However, this kind of tests often give a lot of False Positives. Probably, most of this XXXX genes are not actually differentially expressed. Thus, we’ll use the surrogate variables (SVA) method from the R/Bioconductor package [sva](http://bioconductor.org/packages/sva) to reduce the number of differentially expressed genes.
 
 ```{r}
 sv <- sva(assays(se.filt)$logCPM, mod, mod0)
@@ -604,32 +605,39 @@ sv$n
 ```
 
 The SVA algorithm has found `r sv$n` surrogate variables. Let's use them to
-assess againt the extent of differential expression this time adjusting for these
+assess against the extent of differential expression this time adjusting for these
 surrogate variables.
 
 ```{r}
 modsv <- cbind(mod, sv$sv)
 mod0sv <- cbind(mod0, sv$sv)
 pvsv <- f.pvalue(assays(se.filt)$logCPM, modsv, mod0sv)
-sum(p.adjust(pvsv, method="fdr") < 0.01)
+sum(p.adjust(pvsv, method="bonferroni") < 0.01)
 ```
-
-## Fold change plots
-
-```{r foldchang, echo=FALSE, out.width="600px", fig.cap="Fold change plots normal vs logarithm scale"}
-FDRpvalue <- p.adjust(pv, method="fdr")
-tumorExp <- rowMeans(logCPM.filt[, se.filt$type == "tumor"])
-normalExp <- rowMeans(logCPM.filt[, se.filt$type == "normal"])
-par(mfrow = c(1, 2))
-plot(tumorExp, normalExp, xlab = "Tumor", ylab = "Normal", pch = ".", cex = 4, las = 1)
-plot((tumorExp + normalExp)/2, tumorExp - normalExp, pch = ".", cex = 4, las = 1)
-```
+As was expected, the number of differentially expressed genes has been reduced significantly.
 
 ## Volcano Plot
+
+Nonetheless, significance in the differential expression is not enough to provide this genes with a clinical interest. The fold change is the other factor to be noticed and it represents the magnitude of differential expression of each gene between the study groups (in this particular case tumor and normal).
+
+The volcano plot encompass both features, making it a perfect tool to visually understand our data. 
 
 ```{r volcano, echo=FALSE, out.width="600px", fig.cap="Volcano plot"}
 par(mfrow = c(1,1))
 logFC <- tumorExp-normalExp
 plot(logFC, -log10(pv), pch=16, cex=0.7, xlab="Log fold-change", ylab="-log10 Raw p-value", las=1, col = ifelse(abs(logFC) >= 2, "red", "black"))
-abline(h=-log10(max(pv[FDRpvalue <= 0.001])), lty=2)
+abline(h=-log10(max(pvsv[FDRpvalue <= 0.001])), lty=2)
 ```
+
+In red, the genes that are both with significant differential expression and a high enough fold change (arbitrary set to |2|).In conclussion, this genes are the best candidates to have a role in the malignancy of tumor cells or in some aspect of lung adenocarcinoma tumor.
+
+# Session information
+
+For reproducibility purposes we provide the session information.
+
+```{r}
+sessionInfo()
+```
+
+
+
