@@ -69,15 +69,15 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
 ```
 
 # Introduction
-The lung adenocarcinoma cancer is the most common type of lung cancer. It has a high incidence in the population and also an associated high mortality. That’s because nowadays this cancer is really hard to diagnose in its early steps and usually is found too late. Most of the previous studies aim to find genetic markers to be able to diagnose it in its stages. Although some genetic markers have been described and used, such as the mutation in the Kran gene, but more information is required.
+The lung adenocarcinoma cancer is the most common type of lung cancer. It has a high incidence in the population and also an associated high mortality[1 nature]. That’s because nowadays this cancer is really hard to diagnose in its early steps and usually is found too late[2 old and young]. Most of the previous studies aim to find genetic markers to be able to diagnose it in its stages. Although some genetic markers have been described and used, such as the mutation in the Kran gene, but more information is required [3 review].
 
-Here in this project, the data of the TCGA project will be analyzed with the aim to find (and reproduce) the finding of differential expressed genes that could help to detect this kind of cancer.
+Here in this project, the data of the TCGA project will be analyzed with the aim to find (and reproduce) the finding of differential expressed genes that could help to detect this kind of cancer [1 nature].
 
 # Quality assessment
 
 ## Data description
 
-The data obtained for this project comes from The Cancer Genome Atlas (TCGA). This data contains lung cancer gene expression information of both patients and healthy individuals (control).
+The data obtained for this project comes from The Cancer Genome Atlas (TCGA)[web]. This data contains lung cancer gene expression information of both patients and healthy individuals (control).
 
 ```{r}
 se <- readRDS( "seLUAD.rds")
