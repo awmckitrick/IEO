@@ -197,33 +197,17 @@ x <- cut(rowMeans(assays(se.filt)$logCPM), breaks = h$breaks)
 lines(h$mids, table(x), type = "h", lwd = 10, lend = 1, col = "darkred")
 legend("topright", c("All genes", "Filtered genes"), fill = c("grey", "darkred"))
 
-### MA plots
+### 2.5 Normalization
 
-# Vuvuzela plot
-par(mar = c(5.1,5.1,4.1,2.1),mfrow = c(1,1))
-plotSmear(dge_luad, lowess = TRUE, las = 1, cex.lab = 1.5, cex.axis = 1.2)
-abline(h = 0, col = "blue", lwd = 2)
-
-# Vuvuzela plot refiltered
-mask <- rowMeans(assays(se)$logCPM) > 1
-se.filt <- se[mask, ]
-dge_luad.filt <- dge_luad[mask, ]
-dim(se.filt)
-
-plotSmear(dge_luad.filt, lowess = TRUE, las = 1, cex.lab = 1.5, cex.axis = 1.2)
-abline(h = 0, col = "blue", lwd = 2)
-
-#Vuvuzela plot normalized (TMM)
+#Vuvuzela plot preporcessed vs normalized (TMM)
 
 dge_luad.filt <- calcNormFactors(dge_luad.filt, normalize.method="quantile")
 
-png("./img/vuvuzelas.png",height = 500, width = 1000)
 par(mar = c(5.1,4.1,4.1,2.1),mfrow = c(1, 2))
 plotSmear(dge_luad, lowess = TRUE, las = 1, cex.lab = 1.5, cex.axis = 1.2, main = "Preprocesed data")
 abline(h = 0, col = "blue", lwd = 2)
 plotSmear(dge_luad.filt, lowess = TRUE, las = 1, cex.lab = 1.5, cex.axis = 1.2, main = "Filtered and normalized data")
 abline(h = 0, col = "blue", lwd = 2)
-dev.off()
 
 # Expression by sample (tumor in blue, normal in green)
 par(mfrow=c(5, 4), mar = c(2,2,2,2))
@@ -232,7 +216,6 @@ for (i in c(1,581)) {
   final <- i+19
   for (i in inici:final) {
     A <- rowMeans(assays(se.filt)$logCPM) ; M <- assays(se.filt)$logCPM[, i] - A; C <- se.filt$type[[i]];
-    print(C)
     smoothScatter(A, M,
                   main=colnames(se.filt)[i],
                   las=1,
@@ -411,7 +394,6 @@ names_batchs <- c("MDS_tss.png",
 objects_batchs <- list(tss, samplevial, plate, gender,race, histo)
 outcome <- paste(substr(colnames(se.filt), 9, 12), as.character(se.filt$type), sep="-")
 for (a in 1:5){
-  png(filename = paste("img/", names_batchs[a], sep = ""), width = 1100, height = 700)
   par(mfrow=c(1,1))
   d <- as.dist(1-cor(logCPM, method="spearman"))
   sampleClustering <- hclust(d)
@@ -419,8 +401,8 @@ for (a in 1:5){
   plotMDS(dge_luad.filt, labels=outcome, col=as.integer(batch), main =titles_batchs[a])
   legend("bottomright", legend=sort(unique(batch)), 
          fill=sort(unique(batch)), inset=0.05, cex = 0.7)
-  dev.off()
 }
+
 png(filename = "projct/img/MDS_histology_tumoronly.png", width = 900, height = 800)
 se.tumor <- se.filt[, se.filt$type == "tumor"]
 par(mfrow=c(1,1))
