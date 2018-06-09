@@ -639,5 +639,132 @@ For reproducibility purposes we provide the session information.
 sessionInfo()
 ```
 
+#####################
+# Second part scratch
+#####################
 
+## Charge data again
+
+Charge and filter data again
+
+```{r}
+library(SummarizedExperiment)
+se <- readRDS( "seLUAD.rds")
+
+#ChargeDGE list and normalization factor
+library(edgeR)
+dge_luad <- DGEList(counts = assays(se)$counts, group = se$type, genes = as.data.frame(rowData(se)))
+assays(se)$logCPM <- cpm(dge_luad, log = TRUE, prior.count = 0.25)
+dge_luad <- calcNormFactors(dge_luad)
+
+#Filter out low-expresed genes
+mask <- rowMeans(assays(se)$logCPM) > 1
+
+se <- se[mask, ]
+
+dge_luad <- dge_luad[mask, ]
+dim(dge_luad)
+```
+Start limma DE analysis
+
+```{r}
+#1. Build design matrix
+mod <- model.matrix(~ se.filt$type, colData(se.filt))
+head(mod)
+
+#2. Fit linear regression models
+fit <- lmFit(logCPM.filt, mod)
+class(fit)
+names(fit)
+
+#3. Calculate Bayes
+fit <- eBayes(fit)
+class(fit)
+names(fit)
+
+#4. Output results
+res <- decideTests(fit)
+summary(res)
+```
+
+Filter results by FDR
+```{r}
+FDRcutoff <- 0.05
+res <- decideTests(fit, p.value = FDRcutoff)
+summary(res)
+```
+
+Full table
+```{r}
+tt <- topTable(fit, coef = 2, n = Inf)
+head(tt)
+```
+
+Show metadata for biological interpretation
+```{r}
+genesmd <- data.frame(chr = as.character(seqnames(rowRanges(se.filt))), symbol = rowData(se.filt)[, 
+    1], stringsAsFactors = FALSE)# We have to say explicitly metadata is not a factor
+fit$genes <- genesmd
+tt <- topTable(fit, coef = 2, n = Inf)
+head(tt)
+```
+
+Now, let's examine chromosome distribution of DE genes at 10% FDR
+```{r}
+sort(table(tt$chr[tt$adj.P.Val < FDRcutoff]), decreasing = TRUE)
+```
+
+```{r}
+par(mfrow = c(1, 2), mar = c(4, 5, 2, 2))
+hist(tt$P.Value, xlab = "Raw P-values", main = "", las = 1)
+qqt(fit$t[, 2], df = fit$df.prior + fit$df.residual, main = "", pch = ".", cex = 3)
+abline(-1.5, 10, lwd = 2)
+```
+
+Try again, with covariates
+Repeat pipeline adding the known covariate (concentration of RNA in sample, in this case)
+```{r}
+#1. Build design matrix
+mod <- model.matrix(~ se.filt$type, colData(se.filt))
+head(mod)
+
+v <- voom(dge_luad.filt, mod, plot=TRUE)
+
+#2. Fit linear model
+fit5 <- lmFit(v, mod)
+
+#3. T-statistics
+fit5 <- eBayes(fit5)
+
+#4. Extend of differencial expression
+res5 <- decideTests(fit5, p.value = FDRcutoff)
+summary(res5)
+
+#5. Metadata and fetch table
+fit5$genes <- genesmd
+tt5 <- topTable(fit5, coef = 2, n = Inf)
+head(tt5)
+
+#6. Chromosome distribution
+sort(table(tt5$chr[tt5$adj.P.Val < FDRcutoff]), decreasing = TRUE)
+
+#7. Assess accuracy
+DEgenes5 <- rownames(tt5)[tt5$adj.P.Val < FDRcutoff]
+r <- c(r, sum(DEgenes5 %in% c(msy, xie))/length(c(msy, xie)))
+r
+
+p <- c(p, sum(DEgenes5 %in% c(msy, xie))/length(DEgenes5))
+p
+
+#8. Diagnostic plots
+par(mfrow = c(1, 2), mar = c(4, 5, 2, 2))
+hist(tt5$P.Value, xlab = "Raw P-values", main = "", las = 1)
+qqt(fit5$t[, 2], df = fit5$df.prior + fit5$df.residual, main = "", pch = ".", cex = 3)
+abline(0, 1, lwd = 2)
+```
+
+```{r}
+volcanoplot(fit5, coef = 2, highlight = 7, names = fit5$genes$symbol, main = "Model 5", 
+    las = 1)
+```
 
