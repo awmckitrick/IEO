@@ -10,6 +10,7 @@ library(sva)
 library(grid)
 library(geneplotter)
 library(limma)
+library(corpcor)
 
 ##################
 ## Initialize data
@@ -17,6 +18,7 @@ library(limma)
 
 # Charge data
 se <- readRDS( "seLUAD.rds")
+#Charge sample variables
 dge_luad <- DGEList(counts = assays(se)$counts, genes = as.data.frame(mcols(se)), group = se$type)
 
 # Logaritmize
@@ -40,39 +42,67 @@ dim(se.filt)
 # Normalize
 dge_luad.filt <- calcNormFactors(dge_luad.filt, normalize.method="quantile")
 
-# Batch effect variables
+# Batch effect variables and add them to the summarized experiment
 tss <- substr(colnames(se.filt), 6, 7)
+names(tss) <- colnames(se.filt)
+se.filt$tss <- tss
+
 center <- substr(colnames(se.filt), 27, 28)
+names(center) <- colnames(se.filt)
+se.filt$center <- center
+
 plate <- substr(colnames(se.filt), 22, 25)
+names(plate) <- colnames(se.filt)
+se.filt$plate <- plate
+
 portionanalyte <- substr(colnames(se.filt), 18, 20)
+names(portionanalyte) <- colnames(se.filt)
+se.filt$portionanalyte <- portionanalyte
+
 samplevial <- substr(colnames(se.filt), 14, 16)
+names(samplevial) <- colnames(se.filt)
+se.filt$samplevial <- samplevial
+
 gender <- unname(se.filt$gender)
+names(gender) <- colnames(se.filt)
+se.filt$gender <- gender
+
 race <- unname(se.filt$race)
 histo <- unname(se.filt$histologic_diagnosis.1)
 
 # Removing batch effect
-logCPM <- cpm(dge_luad.filt, log=TRUE, prior.count = 3)
-batch <- as.integer(factor(samplevial))
-logCPM.batch <- logCPM
-logCPM <-removeBatchEffect(logCPM, batch, design = mod)
-assays(se.filt)$logCPM <- logCPM
-s <- fast.svd(t(scale(t(logCPM), center = TRUE, scale = TRUE)))
-pcSds <- s$d
-pcSds[1] <- 0
-svdexp <- s$u %*% diag(pcSds) %*% t(s$v)
-colnames(svdexp) <- colnames(se.filt)
-d <- as.dist(1-cor(svdexp, method="spearman"))
-sampleClustering <- hclust(d)
-sampleDendrogram <- as.dendrogram(sampleClustering, hang=0.1)
-names(outcome) <- colnames(se.filt)
+#logCPM <- cpm(dge_luad.filt, log=TRUE, prior.count = 3)
+#batch <- as.integer(factor(samplevial))
+#logCPM.batch <- logCPM
+#logCPM <-removeBatchEffect(logCPM, batch, design = mod)
+#assays(se.filt)$logCPM <- logCPM
+#s <- fast.svd(t(scale(t(logCPM), center = TRUE, scale = TRUE)))
+#pcSds <- s$d
+#pcSds[1] <- 0
+#svdexp <- s$u %*% diag(pcSds) %*% t(s$v)
+#colnames(svdexp) <- colnames(se.filt)
+#d <- as.dist(1-cor(svdexp, method="spearman"))
+#sampleClustering <- hclust(d)
+#sampleDendrogram <- as.dendrogram(sampleClustering, hang=0.1)
+#names(outcome) <- colnames(se.filt)
+
+# Filter by logCPM
+mask <- rowMeans(assays(se.filt)$logCPM) > 1
+sum(mask)
+
+se.filt <- se.filt[mask, ]
+dim(se.filt)
+
+dge_luad.filt <- dge_luad.filt[mask, ]
+dim(dge_luad.filt)
 
 ##########################
 ## DIfferential expression
 ##########################
 
 # 1. Create SVA models
-mod <- model.matrix(~ se.filt$type, colData(se.filt))
-mod0 <- model.matrix(~ 1, colData(se.filt))
+mod <- model.matrix(~ se.filt$type + se.filt$samplevial, colData(se.filt))
+mod0 <- model.matrix(~ se.filt$samplevial, colData(se.filt))
 pv <- f.pvalue(assays(se.filt)$logCPM, mod, mod0)
 sum(p.adjust(pv, method = "bonferroni") < 0.01)
 
@@ -84,12 +114,14 @@ mod0sv <- cbind(mod0, sv$sv)
 pvsv <- f.pvalue(assays(se.filt)$logCPM, mod, mod0)
 sum(p.adjust(pvsv, method="bonferroni") < 0.01)
 
+par(mfrow = c(1,2))
 v <- voom(dge_luad.filt, mod, plot=TRUE)
+vsv <- voom(dge_luad.filt, modsv, plot=TRUE)
 
 #2. Fit linear model
 par(mfrow = c(1,1))
 fit5 <- lmFit(v, mod)
-fit5sv <- lmFit(v,modsv)
+fit5sv <- lmFit(vsv,modsv)
 
 #3. T-statistics
 fit5 <- eBayes(fit5)
@@ -101,7 +133,6 @@ res5 <- decideTests(fit5, p.value = FDRcutoff)
 summary(res5)
 res5sv <- decideTests(fit5sv, p.value = FDRcutoff)
 summary(res5sv)
-
 
 #5. Metadata and fetch table
 genesmd <- data.frame(
@@ -126,7 +157,7 @@ sort(table(tt5sv$chr[tt5sv$adj.P.Val < FDRcutoff]), decreasing = TRUE)
 
 #8. Diagnostic plots
 par(mfrow = c(1, 2), mar = c(4, 5, 2, 2))
-hist(tt5$P.Value, xlab = "Raw P-values", main = "", las = 1)
+hist(tt5sv$P.Value, xlab = "Raw P-values", main = "", las = 1)
 qqt(fit5$t[, 2], df = fit5$df.prior + fit5$df.residual, main = "", pch = ".", cex = 3)
 abline(0, 1, lwd = 2)
 
@@ -143,7 +174,7 @@ sum(p.adjust(pvsv, method="bonferroni") < 0.01)
 
 
 # 9. Volcano plot
-par(mfrow = c(1,2))
+par(mfrow = c(1,1))
 volcanoplot(fit5, coef = 2,
             highlight = 10,
             names = fit5$genes$symbol,
@@ -186,13 +217,6 @@ htmlReport(hgOver, file = "gotests_overtumor.html")#Not working for version prob
 browseURL("gotests_overtumor.html")
 
 summary(hgOver)
-
-# 3b. output results
-head(geneCounts(hgOver))
-
-head(universeCounts(hgOver))
-
-head(pvalues(hgOver))
 
 ###### Intepreting table
 #Check
@@ -245,32 +269,34 @@ Im <- incidence(gsc)
 dim(Im)
 Im[1:6, 1:10]
 
-#2. Discard genes not part of our data
+# Discard genes not part of our data
 Im <- Im[, colnames(Im) %in% rownames(se.filt)]
 dim(Im)
 
-#3. Discard genes not present in any of the datasets
+# Discard genes not present in any of the datasets
 se.filt <- se.filt[colnames(Im), ]
 dim(se.filt)
 dge_luad.filt <- dge_luad.filt[colnames(Im), ]
 dim(dge_luad.filt)
 
-#4. Make sure the DE analysis is already done
-
-#5. T-values plot
-q <- qqnorm(tt5sv$t)
-abline(0, 1)
-chroutliers <- tt5sv$chr[abs(tt5sv$t) > 10]
-text(qq$x[abs(qq$y) > 10], qq$y[abs(qq$y) > 10], chroutliers, pos = 4)
-
-#6. Limit to gene sets with at least 5 genes, to give more robustness to our statistics
+# Limit to gene sets with at least 5 genes, to give more robustness to our statistics
 Im <- Im[rowSums(Im) >= 5, ]
 dim(Im)
 
-#7. Calculate Z-scores and qqplot
+#2. Make sure the DE analysis is already done
+
+#3 T-values plot
+par(mfrow = c(1,1))
+qq <- qqnorm(tt5sv$t)
+abline(0, 1)
+chroutliers <- tt5sv$chr[abs(tt5sv$t) > 10]
+text(qq$x[abs(qq$y) > 10], qq$y[abs(qq$y) > 10], chroutliers, pos = 4)# So wrong
+
+#7. Let's try normal: Calculate Z-scores and qqplot
 tGSgenes <- tt5sv[match(colnames(Im), rownames(tt5sv)), "t"]
 zS <- sqrt(rowSums(Im)) * (as.vector(Im %*% tGSgenes)/rowSums(Im))
 qqnorm(zS)
+abline(0, 1)
 
 #8. Sorting by z-scores to obtain best gene sets
 rnkGS <- sort(abs(zS), decreasing = TRUE)
@@ -366,13 +392,25 @@ DEgs
 
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             # 3. Inspect results with boxplot. CHange MSY and XiE for the ones you desire to analyze
 par(mfrow = c(1, 2))
-#boxplot(GSexpr["MSY", ] ~ lclse$type, main = "MSY", las = 1, cex.axis = 2)
+#boxplot(GSexpr["TRIM29", ] ~ lclse$type, main = "MSY", las = 1, cex.axis = 2)
 #boxplot(GSexpr["XiE", ] ~ lclse$type, main = "XiE", las = 1, cex.axis = 2)
 
 # 4. Volcano plot time!!
-plot(tt$logFC, -log10(tt5sv$P.Value), xlab="Log2 fold-change", ylab="-log10 P-value",
+par(mfrow = c(1,1))
+plot(tt5sv$logFC, -log10(tt5sv$P.Value), xlab="Log2 fold-change", ylab="-log10 P-value",
      pch=".", cex=5, col=grey(0.75), cex.axis=1.2, cex.lab=1.5, las=1)
 posx <- tt5sv[tt5sv$adj.P.Val < 0.01, "logFC"] ; posy <- -log10(tt5sv[tt5sv$adj.P.Val < 0.01, "P.Value"])
 points(posx, posy, pch=".", cex=5, col="red")
-text(posx, posy, rownames(tt5sv)[tt5sv$adj.P.Val < 0.01], pos=1)
+text(posx, posy, tt5sv$symbol[tt5sv$adj.P.Val < 0.01], pos=1)
+
+
+############# Extra!!!!!! How many factors contain information about normal samples
+# Response: Only type, gender and patient_barcode. So we can study nothing about covariates
+
+for (fac in names(colData(se))){
+  if(length(table(table(se[[fac]],se$type)[,1])) > 1){
+    print(fac)
+    print(table(se[[fac]],se$type))
+  }
+}
 

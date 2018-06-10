@@ -386,10 +386,11 @@ histo <- unname(se.filt$histologic_diagnosis.1)
 In order to check possible batch effects in the clinical variables of interest, cross tabulation tables were performed.
 
 ```{r}
+
 table(data.frame(TYPE=se.filt$type, TSS=tss))
 # Too much zeros. Only six TSS have noral samples
 
-table(data.frame(TYPE=se.filt$type, TSS=samplevial))
+table(data.frame(TYPE=se.filt$type, SAMPLEVIAL=samplevial))
 # hey batch effect!!
 
 table(data.frame(TYPE=se.filt$type, PLATE=plate))
